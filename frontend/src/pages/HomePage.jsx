@@ -6,8 +6,10 @@ import HeroMarquee from "../components/HeroMarquee";
 import PressStrip from "../components/PressStrip";
 import About from "../components/About";
 import Gallery from "../components/Gallery";
+import WhyJenika from "../components/WhyJenika";
 import HowItWorks from "../components/HowItWorks";
 import Services from "../components/Services";
+import Shop from "../components/Shop";
 import Testimonials from "../components/Testimonials";
 import InstagramGrid from "../components/InstagramGrid";
 import FAQ from "../components/FAQ";
@@ -65,11 +67,13 @@ export default function HomePage() {
         <PressStrip />
         <About />
         <Gallery />
+        <WhyJenika />
         <HowItWorks onBookNow={() => openBooking(null, null)} />
         <Services
           categories={categories}
           onSelect={(s) => openBooking(s)}
         />
+        <Shop />
         <Testimonials items={testimonials} />
         <InstagramGrid />
         <FAQ />
