@@ -13,6 +13,7 @@ import hmac
 import hashlib
 import jwt
 import razorpay
+from email_service import send_booking_confirmation
 
 
 ROOT_DIR = Path(__file__).parent
@@ -344,6 +345,16 @@ async def verify_payment(payload: VerifyPayment):
         }}
     )
     updated = await db.bookings.find_one({"id": payload.booking_id}, {"_id": 0})
+    # Fire-and-forget email confirmation (won't block / fail the response)
+    try:
+        email_id = await send_booking_confirmation(updated)
+        if email_id:
+            await db.bookings.update_one(
+                {"id": payload.booking_id},
+                {"$set": {"confirmation_email_id": email_id}}
+            )
+    except Exception as e:
+        logger.warning(f"Email send failed (non-blocking): {e}")
     return {"success": True, "booking": updated, "is_mock": is_mock}
 
 

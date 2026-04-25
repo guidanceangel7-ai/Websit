@@ -1,0 +1,45 @@
+{
+  "summary": "Iteration 2 deltas verified end-to-end. Backend: 9/9 new pytest cases pass for blocked-dates CRUD + slots integration + email confirmation hook. Resend logs show 'Resend email sent id=18961787-...' on payment verify. Frontend: Gallery section renders 3 figures with correct captions/images between About (#about) and Services (#services), About now uses jenikaPhoto (8zzwdxlk), Admin Block-out panel adds/removes dates with toast feedback, and BookingDialog fetches /api/blocked-dates on open and feeds into the calendar's disable predicate (code-confirmed; UI add/remove flow tested live).",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Gallery first card", "issues": ["The dark gradient overlay over figure 1 (Live Reading Setup) is fairly heavy — caption text 'Sacred space — crystals, angels & the cards' visually overlaps the small angel figurine area making the headline hard to read on first glance. Consider reducing overlay opacity from /70 to /50 at the bottom or shifting caption higher with safer contrast."]},
+      {"screen": "Admin Dashboard / Block-out form", "issues": ["The native HTML date input ('mm/dd/yyyy') is used here instead of the shadcn Calendar / Popover that the booking flow uses. Functional but inconsistent with the rest of the app's design language."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_blocked_dates_and_email.py",
+    "/app/test_reports/pytest/iteration_2_results.xml"
+  ],
+  "action_items": [
+    "(Optional) Replace the native date input on Admin block-out form with the shadcn Calendar+Popover component used in BookingDialog for visual consistency.",
+    "(Optional) Lighten Gallery figure-1 gradient overlay so caption is more readable.",
+    "(Optional cleanup) Remove or comment out the dead branch on BookingDialog.jsx line 94 — `setStep(initialService.is_voice_note ? 0 : 0)` always evaluates to 0; carried over from iteration 1."
+  ],
+  "critical_code_review_comments": [
+    "server.py: /api/blocked-dates is correctly public (only date strings exposed, reason omitted) — good privacy hygiene.",
+    "server.py: blocked_dates upsert pattern is correct and idempotent. POST returns success even when overwriting an existing date — UI surfaces a 'Date blocked' toast both times which could be confusing when admin meant to add a new date but typed an existing one. Consider returning {created: true|false} so UI can show 'Updated' vs 'Added'.",
+    "email_service.py: send_booking_confirmation properly try/excepts so booking flow never breaks if Resend fails. Logging includes the Resend id on success ✓.",
+    "email_service.py: confirmation_email_id is stored on the booking — verified in admin list response.",
+    "BookingDialog.jsx fetches blocked-dates only on dialog OPEN. If admin blocks a date while the dialog is already open in another tab, the user could still pick that date until they close+reopen. Acceptable for MVP; flag for later if multi-tab admin is a real flow.",
+    "Gallery.jsx: GALLERY array is hard-coded in /lib/brand.js. Future enhancement — make it admin-editable via a /api/gallery endpoint."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_blocked_dates_and_email.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 new pytest + 15/15 from iteration 1 still expected to pass)",
+    "frontend": "100% on tested deltas (Gallery render, About photo, Admin block-out add/remove)"
+  },
+  "test_credentials": "Admin jenika / guidance@2026 verified working. Resend uses real key in /app/backend/.env; deliveries succeed only to verified recipients (guidance.angel7@gmail.com).",
+  "seed_data_creation": "Created and removed 1 blocked date (2026-05-16, reason TEST_iter2). Created 1 TEST_EmailFlow booking (vn-question, ₹550, paid via mock) addressed to guidance.angel7@gmail.com — kept intentionally so main agent can confirm Resend delivery in inbox; safe to purge.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 2 stable. Gallery is at section id=featured between #about and #services. Admin block-out panel at bottom of admin dashboard uses [data-testid=blocked-form|blocked-date-input|blocked-reason-input|blocked-add-btn] and chips have data-testid=blocked-{YYYY-MM-DD}. Public endpoint GET /api/blocked-dates returns ['YYYY-MM-DD',...] (no reasons exposed). Email confirmation_email_id is stored on booking doc; visible in /api/admin/bookings response.",
+  "rca of the issue": "N/A — no defects found in iteration 2 deltas."
+}
