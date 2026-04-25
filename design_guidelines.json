@@ -1,0 +1,121 @@
+{
+  "project_name": "Guidance Angel",
+  "domain": "Spiritual Consulting, Tarot, Numerology, Akashic Records",
+  "theme": "light",
+  "archetype": "3 (Pastel & Soft) mixed with Ethereal/Angelic Elegance",
+  "brand_vibe": "Sacred, Feminine, Angelic, Ethereal, Serene, Sisterly",
+  "colors": {
+    "background": "#FBF4E8",
+    "primary": "#6B5B95",
+    "primary_hover": "#5A4C7E",
+    "secondary": "#9B8AC4",
+    "accent_1": "#EBB99A",
+    "accent_2": "#C8B6E2",
+    "accent_3": "#F4C6D6",
+    "text_main": "#3A2E5D",
+    "text_muted": "#6B5B95",
+    "surface": "#FFFFFF",
+    "surface_glass": "rgba(255, 255, 255, 0.6)",
+    "border_subtle": "rgba(235, 185, 154, 0.3)"
+  },
+  "typography": {
+    "fonts": {
+      "heading": "Lora",
+      "body": "Poppins"
+    },
+    "hierarchy": {
+      "h1": "text-5xl sm:text-6xl tracking-tight font-medium text-[#3A2E5D]",
+      "h2": "text-3xl sm:text-4xl tracking-tight font-medium text-[#3A2E5D]",
+      "h3": "text-xl sm:text-2xl font-medium text-[#6B5B95]",
+      "body": "text-base leading-relaxed text-[#3A2E5D]/80",
+      "overline": "text-xs tracking-[0.2em] uppercase font-semibold text-[#EBB99A]"
+    }
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "Generous (p-8, p-12, p-24, gap-12). Create an airy, breathable experience.",
+    "border_radius": "Soft and feminine. Use rounded-2xl or rounded-[2rem] for large cards, rounded-full for buttons.",
+    "container_max_width": "max-w-7xl mx-auto px-6 sm:px-12",
+    "sections": {
+      "hero": "Full height (min-h-[90vh]). Use the ethereal soft cloud image as a subtle background layer. Central text alignment, highly elegant. Hero image overlaid with maximum bg-white/30 to keep it visible.",
+      "services": "Asymmetric Bento-style or arch-shaped cards. Solid white cards on the Warm Ivory background, or glassmorphism over subtle gradient blobs.",
+      "booking": "Clean Shadcn components heavily customized: rounded corners, Peach Gold ring colors, Deep Lavender selected states.",
+      "testimonials": "Horizontal scrolling marquee using react-fast-marquee or Swiper, clean typography, soft blush or ivory card backgrounds."
+    }
+  },
+  "surfaces_and_shadows": {
+    "cards": "bg-white/80 backdrop-blur-md border border-[#EBB99A]/20 shadow-[0_8px_32px_rgba(107,91,149,0.05)]",
+    "header": "Crystal glass variant: bg-[#FBF4E8]/80 backdrop-blur-xl border-b border-[#EBB99A]/20",
+    "buttons": {
+      "primary": "bg-[#6B5B95] text-white hover:bg-[#5A4C7E] shadow-[0_4px_14px_rgba(107,91,149,0.3)] transition-all duration-300 rounded-full px-8 py-3",
+      "secondary": "bg-[#FBF4E8] text-[#6B5B95] border border-[#6B5B95]/20 hover:bg-[#EBB99A]/10 transition-all duration-300 rounded-full px-8 py-3"
+    }
+  },
+  "motion_and_interactions": {
+    "scroll": "Use Lenis for premium smooth scrolling.",
+    "page_load": "Staggered fade-up for hero elements using Framer Motion (y: 20 -> y: 0).",
+    "hover_states": "Cards lift up (-translate-y-2) with a softer, wider shadow. Buttons scale up slightly (scale: 1.02).",
+    "micro_interactions": "Include floating sparkles (SVG or Framer Motion) near the hero heading and 'Book Now' CTA. Gentle, slow-moving elements."
+  },
+  "media": {
+    "logos": {
+      "round": "https://customer-assets.emergentagent.com/job_guidance-angel/artifacts/7hmn14ue_ChatGPT%20Image%20Apr%2023%2C%202026%2C%2004_16_24%20PM.png",
+      "brand_board": "https://customer-assets.emergentagent.com/job_guidance-angel/artifacts/egbzl0sq_ChatGPT%20Image%20Apr%2023%2C%202026%2C%2004_18_28%20PM.png"
+    },
+    "images": {
+      "hero_background": "https://images.pexels.com/photos/2088142/pexels-photo-2088142.jpeg",
+      "tarot_aesthetic": "https://images.unsplash.com/photo-1719979308438-d1b46752f641?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NTYxODd8MHwxfHNlYXJjaHwxfHxhZXN0aGV0aWMlMjB0YXJvdCUyMGNhcmRzJTIwc29mdHxlbnwwfHx8fDE3NzcwOTU1OTd8MA&ixlib=rb-4.1.0&q=85",
+      "crystal_healing": "https://images.unsplash.com/photo-1766430342814-10cf752ac4f7?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1NTZ8MHwxfHNlYXJjaHwyfHxjcnlzdGFsJTIwc29mdCUyMHBhc3RlbCUyMGhlYWxpbmd8ZW58MHx8fHwxNzc3MDk1NTg4fDA&ixlib=rb-4.1.0&q=85",
+      "celestial_accent": "https://images.unsplash.com/photo-1576582956388-13f35cc4c411?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MTJ8MHwxfHNlYXJjaHwxfHxjZWxlc3RpYWwlMjBzdGFycyUyMGdvbGQlMjBhZXN0aGV0aWN8ZW58MHx8fHwxNzc3MDk1NTk3fDA&ixlib=rb-4.1.0&q=85",
+      "jenika_about": "https://static.wixstatic.com/media/8a9eb1_eaaaf944f4384f98bd66966c5aa46c33~mv2.jpeg/v1/fill/w_357,h_378,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/WhatsApp%20Image%202025-06-12%20at%2015_27_33.jpeg"
+    }
+  },
+  "content_structure": {
+    "navigation": "Logo on left, Links (About, Services, Testimonials, FAQ) centered, 'Book Reading' CTA on right. Sticky glassmorphism header.",
+    "hero": "Headline: 'Guiding You to Light'. Subhead: 'Discover your true path with Jenika Bhayani—Gujarat's celebrity Tarot Card Reader and Akashic Records Consultant.'",
+    "about": "Highlight: 7+ Years, 5,000+ Clients, 200+ Google Reviews. Incorporate photo of Jenika. Text: 'Welcome to my tarot card reading services...'",
+    "services": [
+      {
+        "name": "Tarot + Numerology Reading",
+        "prices": ["₹2,100 (15 min)", "₹4,000 (30 min)", "₹6,500 (45 min)"]
+      },
+      {
+        "name": "Akashic Record Reading",
+        "prices": ["₹4,000 (30 min)", "₹5,500 (45 min)", "₹7,500 (1 hr)"]
+      },
+      {
+        "name": "Voice Note Reading",
+        "items": [
+          "Question Tarot + Numerology: ₹550",
+          "Tarotscope: ₹1,500",
+          "Personal Numerology Report: ₹2,121"
+        ]
+      }
+    ],
+    "booking_flow": "Users select a service -> Shadcn DatePicker/Calendar -> Time slot -> Collect info (Name, Email, Phone, Birth Details) -> Razorpay integration.",
+    "testimonials": "Highlight Paridhi, Bhagyshree, Parul, Reena. Display 5-star icons.",
+    "trust_badges": "Visual strip displaying: '200+ Google Reviews | 1000+ IG Testimonials | 5000+ Clients | Celebrity Reader'",
+    "admin_dashboard": "Password protected (/admin). Uses Shadcn UI Table to list upcoming bookings. Needs clean 'Pastel & Soft' customized shadcn styles."
+  },
+  "components_and_libraries": {
+    "icons": "lucide-react (thin, 1.5 stroke width for elegant feel)",
+    "animations": "framer-motion, @studio-freight/react-lenis",
+    "ui_components": "shadcn/ui (heavily restyled for pastel theme. Round corners to rounded-xl, remove harsh black borders, replace with subtle #EBB99A/30 borders)",
+    "forms": "react-hook-form + zod"
+  },
+  "accessibility": {
+    "contrast": "Ensure text is readable on ivory. Deep Lavender (#6B5B95) passes against Warm Ivory (#FBF4E8).",
+    "test_ids": "Mandatory data-testid on all buttons, form inputs, booking flow steps, and service cards."
+  },
+  "instructions_to_main_agent": [
+    "1. Setup standard React + Vite + Tailwind project. Include Lora and Poppins from Google Fonts.",
+    "2. Add framer-motion and react-lenis for premium smooth scrolling.",
+    "3. Overwrite tailwind.config.js with the exact hex codes provided in 'colors'.",
+    "4. Build the landing page using pure HTML/Tailwind for the layout, applying generous padding and feminine arched shapes for imagery.",
+    "5. Do NOT use generic purple gradients. Use Warm Ivory background and soft Deep Lavender/Peach Gold solid colors or extremely subtle radial glows.",
+    "6. Build the booking flow leveraging Shadcn components (Dialog, Calendar, Form, Select). Strip out default Vercel-look borders/shadows and apply soft pastels and rounded edges.",
+    "7. Integrate a mock Razorpay flow or standard Razorpay checkout structure.",
+    "8. Build a protected /admin route showing a Shadcn data table of bookings.",
+    "9. Use the provided media URLs exclusively. Do not use placeholder images.",
+    "10. Include 'data-testid' attributes on all interactive elements for testing."
+  ]
+}
