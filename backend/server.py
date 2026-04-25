@@ -13,7 +13,7 @@ import hmac
 import hashlib
 import jwt
 import razorpay
-from email_service import send_booking_confirmation
+from email_service import send_booking_confirmation, send_order_confirmation
 from whatsapp_service import send_booking_whatsapp
 
 
@@ -399,35 +399,38 @@ SEED_TESTIMONIALS = [
 SEED_PRODUCTS = [
     {
         "id": "p-crystals",
-        "name": "Energised Crystals",
+        "name": "Energised Crystals Set",
         "blurb": "Hand-picked rose quartz, amethyst, citrine and clear quartz — cleansed and charged with reiki for their highest purpose.",
-        "price_inr": None,
+        "price_inr": 1499,
         "badge": "Most Loved",
         "image_url": None,
         "accent": "from-[#C8B6E2] to-[#E6DDF1]",
-        "shop_url": "https://guidanceangel7.exlyapp.com",
+        "shop_url": "",
+        "in_stock": True,
         "order": 1,
     },
     {
         "id": "p-candles",
-        "name": "Intention Candles",
-        "blurb": "Soy wax candles infused with herbs, essential oils and mantras — for love, abundance, protection and clarity rituals.",
-        "price_inr": None,
+        "name": "Intention Candle",
+        "blurb": "Soy wax candle infused with herbs, essential oils and mantras — for love, abundance, protection or clarity rituals.",
+        "price_inr": 799,
         "badge": "Bestseller",
         "image_url": None,
         "accent": "from-[#F4C6D6] to-[#FBE4D5]",
-        "shop_url": "https://guidanceangel7.exlyapp.com",
+        "shop_url": "",
+        "in_stock": True,
         "order": 2,
     },
     {
         "id": "p-oils",
-        "name": "Healing Oils",
-        "blurb": "Sacred blends crafted with crystals, herbs and pure essential oils. Anoint candles, pulse points and altars.",
-        "price_inr": None,
+        "name": "Healing Oil Blend",
+        "blurb": "Sacred 30 ml roll-on blend crafted with crystals, herbs and pure essential oils. Anoint candles, pulse points and altars.",
+        "price_inr": 999,
         "badge": "New",
         "image_url": None,
         "accent": "from-[#EBB99A] to-[#F4C6D6]",
-        "shop_url": "https://guidanceangel7.exlyapp.com",
+        "shop_url": "",
+        "in_stock": True,
         "order": 3,
     },
 ]
@@ -435,7 +438,7 @@ SEED_PRODUCTS = [
 
 @app.on_event("startup")
 async def seed_db():
-    SEED_VERSION = "v6-products-settings"
+    SEED_VERSION = "v7-orders"
     meta = await db.app_meta.find_one({"_id": "seed"}, {"_id": 0}) or {}
     if meta.get("version") != SEED_VERSION:
         await db.services.delete_many({})
@@ -530,8 +533,12 @@ async def _get_settings() -> dict:
         "open_hour": s.get("open_hour", 10),
         "close_hour": s.get("close_hour", 20),
         "slot_minutes": s.get("slot_minutes", 30),
-        "open_days": s.get("open_days", [0, 1, 2, 3, 4, 5]),  # 0=Mon ... 6=Sun (Sun closed default)
+        "open_days": s.get("open_days", [0, 1, 2, 3, 4, 5]),
     }
+
+
+# Reserve a slot for 10 minutes for in-progress bookings
+SLOT_RESERVATION_MINUTES = 10
 
 
 @api_router.get("/slots/{date_str}")
@@ -555,7 +562,6 @@ async def available_slots(date_str: str):
             "message": blocked.get("reason") or "Unavailable on this date",
         }
 
-    # Generate slots from open_hour:00 to (close_hour-1):30 in slot_minutes increments
     all_slots = []
     cur = datetime(2000, 1, 1, settings["open_hour"], 0)
     end = datetime(2000, 1, 1, settings["close_hour"], 0)
@@ -564,10 +570,18 @@ async def available_slots(date_str: str):
         all_slots.append(cur.strftime("%I:%M %p").lstrip("0"))
         cur += step
 
+    # Block: paid bookings + pending bookings from the last RESERVATION minutes
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=SLOT_RESERVATION_MINUTES)).isoformat()
     booked = await db.bookings.find(
-        {"booking_date": date_str, "payment_status": "paid"},
-        {"_id": 0, "booking_slot": 1}
-    ).to_list(length=200)
+        {
+            "booking_date": date_str,
+            "$or": [
+                {"payment_status": "paid"},
+                {"payment_status": "pending", "created_at": {"$gte": cutoff}},
+            ],
+        },
+        {"_id": 0, "booking_slot": 1},
+    ).to_list(length=300)
     booked_set = {b["booking_slot"] for b in booked if b.get("booking_slot")}
     available = [s for s in all_slots if s not in booked_set]
     return {"date": date_str, "slots": available, "is_open": True}
@@ -946,10 +960,15 @@ class ProductIn(BaseModel):
     blurb: str = ""
     price_inr: Optional[int] = None
     badge: Optional[str] = None
-    image_url: Optional[str] = None  # can be solid/gradient color name or image URL
+    image_url: Optional[str] = None  # external URL OR data: URI for uploaded image
     accent: Optional[str] = "from-[#C8B6E2] to-[#E6DDF1]"
     shop_url: Optional[str] = None
+    in_stock: bool = True
     order: int = 100
+
+
+class ProductImageUpload(BaseModel):
+    image_data: str  # base64 data URI or raw base64 (we accept both)
 
 
 @api_router.get("/products")
@@ -984,6 +1003,209 @@ async def admin_update_product(pid: str, payload: ProductIn, _admin: str = Depen
 async def admin_delete_product(pid: str, _admin: str = Depends(verify_admin)):
     res = await db.products.delete_one({"id": pid})
     return {"success": True, "removed": res.deleted_count}
+
+
+@api_router.post("/admin/products/{pid}/image")
+async def admin_upload_product_image(
+    pid: str,
+    payload: ProductImageUpload,
+    _admin: str = Depends(verify_admin),
+):
+    """Accept a base64 data URI (e.g. 'data:image/png;base64,...') or raw base64 and store on the product."""
+    data = (payload.image_data or "").strip()
+    if not data:
+        raise HTTPException(status_code=400, detail="image_data is empty")
+    # Normalise to a data: URI if just raw b64 was sent
+    if not data.startswith("data:"):
+        data = f"data:image/jpeg;base64,{data}"
+    # Sanity: limit ~6 MB raw payload
+    if len(data) > 8_500_000:
+        raise HTTPException(status_code=413, detail="Image too large (max ~6 MB). Compress first.")
+    res = await db.products.update_one({"id": pid}, {"$set": {"image_url": data}})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"success": True, "image_set": True}
+
+
+# ============== Orders (e-commerce) ==============
+class ShippingAddress(BaseModel):
+    line1: str
+    line2: Optional[str] = ""
+    city: str
+    state: str
+    postal_code: str
+    country: str = "India"
+
+
+class OrderItemIn(BaseModel):
+    product_id: str
+    quantity: int = 1
+
+
+class OrderCreate(BaseModel):
+    items: List[OrderItemIn]
+    customer_name: str
+    customer_email: EmailStr
+    customer_phone: str
+    address: ShippingAddress
+    notes: Optional[str] = ""
+
+
+class OrderItem(BaseModel):
+    product_id: str
+    product_name: str
+    quantity: int
+    unit_price_inr: int
+    line_total_inr: int
+
+
+class OrderVerify(BaseModel):
+    order_id: str
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: Optional[str] = None
+
+
+class OrderStatusUpdate(BaseModel):
+    order_status: str  # pending | confirmed | shipped | delivered | cancelled
+
+
+@api_router.post("/orders/create-order")
+async def orders_create(payload: OrderCreate):
+    if not payload.items:
+        raise HTTPException(status_code=400, detail="Cart is empty")
+    # Validate + price items from DB (don't trust client prices)
+    items: List[dict] = []
+    total_paise = 0
+    for it in payload.items:
+        product = await db.products.find_one({"id": it.product_id}, {"_id": 0})
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Product not found: {it.product_id}")
+        if not product.get("price_inr"):
+            raise HTTPException(status_code=400, detail=f"Product {product['name']} has no price set")
+        if not product.get("in_stock", True):
+            raise HTTPException(status_code=400, detail=f"Product {product['name']} is out of stock")
+        qty = max(1, int(it.quantity))
+        unit = int(product["price_inr"])
+        line_total = unit * qty
+        total_paise += line_total * 100
+        items.append({
+            "product_id": product["id"],
+            "product_name": product["name"],
+            "quantity": qty,
+            "unit_price_inr": unit,
+            "line_total_inr": line_total,
+        })
+
+    order_id = str(uuid.uuid4())
+    if USE_MOCK_PAYMENT or razorpay_client is None:
+        rzp_order_id = f"order_mock_{uuid.uuid4().hex[:14]}"
+        is_mock = True
+    else:
+        try:
+            order = razorpay_client.order.create({
+                "amount": total_paise,
+                "currency": "INR",
+                "receipt": order_id[:40],
+                "payment_capture": 1,
+            })
+            rzp_order_id = order["id"]
+            is_mock = False
+        except Exception as e:
+            logger.error(f"Razorpay order creation failed: {e}")
+            raise HTTPException(status_code=502, detail="Payment provider error")
+
+    doc = {
+        "id": order_id,
+        "items": items,
+        "total_inr": total_paise // 100,
+        "customer_name": payload.customer_name,
+        "customer_email": payload.customer_email,
+        "customer_phone": payload.customer_phone,
+        "address": payload.address.model_dump(),
+        "notes": payload.notes or "",
+        "razorpay_order_id": rzp_order_id,
+        "razorpay_payment_id": None,
+        "payment_status": "pending",
+        "order_status": "pending",
+        "is_mock_payment": is_mock,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.orders.insert_one(doc)
+    return {
+        "order_id": order_id,
+        "razorpay_order_id": rzp_order_id,
+        "razorpay_key_id": RAZORPAY_KEY_ID,
+        "amount_paise": total_paise,
+        "currency": "INR",
+        "is_mock": is_mock,
+    }
+
+
+@api_router.post("/orders/verify-payment")
+async def orders_verify(payload: OrderVerify):
+    order = await db.orders.find_one({"id": payload.order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order["razorpay_order_id"] != payload.razorpay_order_id:
+        raise HTTPException(status_code=400, detail="Order ID mismatch")
+
+    is_mock = order.get("is_mock_payment", False) or USE_MOCK_PAYMENT
+    if not is_mock:
+        if not payload.razorpay_signature:
+            raise HTTPException(status_code=400, detail="Signature required")
+        body = f"{payload.razorpay_order_id}|{payload.razorpay_payment_id}"
+        expected = hmac.new(
+            RAZORPAY_KEY_SECRET.encode(),
+            body.encode(),
+            hashlib.sha256,
+        ).hexdigest()
+        if not hmac.compare_digest(expected, payload.razorpay_signature):
+            await db.orders.update_one(
+                {"id": payload.order_id},
+                {"$set": {"payment_status": "failed"}},
+            )
+            raise HTTPException(status_code=400, detail="Signature verification failed")
+
+    await db.orders.update_one(
+        {"id": payload.order_id},
+        {"$set": {
+            "razorpay_payment_id": payload.razorpay_payment_id,
+            "payment_status": "paid",
+            "order_status": "confirmed",
+        }},
+    )
+    updated = await db.orders.find_one({"id": payload.order_id}, {"_id": 0})
+
+    # Best-effort confirmation emails
+    try:
+        await send_order_confirmation(updated)
+    except Exception as e:
+        logger.warning(f"Order email failed: {e}")
+    return {"success": True, "order": updated, "is_mock": is_mock}
+
+
+@api_router.get("/admin/orders")
+async def admin_list_orders(_admin: str = Depends(verify_admin)):
+    docs = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=1000)
+    return docs
+
+
+@api_router.patch("/admin/orders/{oid}")
+async def admin_update_order(
+    oid: str,
+    payload: OrderStatusUpdate,
+    _admin: str = Depends(verify_admin),
+):
+    allowed = {"pending", "confirmed", "shipped", "delivered", "cancelled"}
+    if payload.order_status not in allowed:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Allowed: {allowed}")
+    res = await db.orders.update_one(
+        {"id": oid}, {"$set": {"order_status": payload.order_status}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"success": True, "order_status": payload.order_status}
 
 
 # ============== Wire-up ==============
