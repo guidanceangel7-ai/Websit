@@ -6,7 +6,7 @@ import os
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
-from typing import List, Optional
+from typing import List, Optional, Dict
 import uuid
 from datetime import datetime, timezone, date as date_type, timedelta
 import hmac
@@ -538,12 +538,53 @@ async def list_testimonials():
 
 async def _get_settings() -> dict:
     s = await db.settings.find_one({"_id": "main"}, {"_id": 0}) or {}
+    # `windows` is the new model: dict[str, list[[start_hour, end_hour]]] keyed
+    # by weekday "0".."6". If missing for a day, we synthesise from legacy
+    # `open_hour` / `close_hour` / `open_days` so we stay backward-compat.
+    legacy_open = s.get("open_hour", 10)
+    legacy_close = s.get("close_hour", 20)
+    legacy_days = s.get("open_days", [0, 1, 2, 3, 4, 5])
+    legacy_window = [[legacy_open, legacy_close]]
+    saved_windows = s.get("windows") or {}
+    windows: dict[str, list] = {}
+    for d in range(7):
+        key = str(d)
+        if key in saved_windows:
+            windows[key] = [w for w in saved_windows[key] if w and len(w) == 2]
+        else:
+            windows[key] = list(legacy_window) if d in legacy_days else []
     return {
-        "open_hour": s.get("open_hour", 10),
-        "close_hour": s.get("close_hour", 20),
+        "open_hour": legacy_open,
+        "close_hour": legacy_close,
         "slot_minutes": s.get("slot_minutes", 30),
-        "open_days": s.get("open_days", [0, 1, 2, 3, 4, 5]),
+        "open_days": legacy_days,
+        "windows": windows,
     }
+
+
+def _slots_for_windows(windows: list, slot_minutes: int) -> list[str]:
+    """Generate hh:MM AM/PM slot strings for each [start, end] window."""
+    out: list[str] = []
+    step = timedelta(minutes=slot_minutes)
+    for w in windows or []:
+        if not w or len(w) != 2:
+            continue
+        start_h, end_h = int(w[0]), int(w[1])
+        if start_h >= end_h:
+            continue
+        cur = datetime(2000, 1, 1, start_h, 0)
+        end = datetime(2000, 1, 1, end_h, 0) if end_h < 24 else datetime(2000, 1, 2, 0, 0)
+        while cur < end:
+            out.append(cur.strftime("%I:%M %p").lstrip("0"))
+            cur += step
+    # Deduplicate preserving order (in case windows overlap by mistake)
+    seen: set = set()
+    uniq: list = []
+    for s in out:
+        if s not in seen:
+            seen.add(s)
+            uniq.append(s)
+    return uniq
 
 
 # Reserve a slot for 10 minutes for in-progress bookings
@@ -559,7 +600,8 @@ async def available_slots(date_str: str):
         raise HTTPException(status_code=400, detail="Invalid date format, use YYYY-MM-DD")
 
     settings = await _get_settings()
-    if d.weekday() not in settings["open_days"]:
+    day_windows = settings["windows"].get(str(d.weekday())) or []
+    if not day_windows:
         return {"date": date_str, "slots": [], "is_open": False, "message": "Closed on this day"}
 
     blocked = await db.blocked_dates.find_one({"date": date_str}, {"_id": 0})
@@ -571,13 +613,7 @@ async def available_slots(date_str: str):
             "message": blocked.get("reason") or "Unavailable on this date",
         }
 
-    all_slots = []
-    cur = datetime(2000, 1, 1, settings["open_hour"], 0)
-    end = datetime(2000, 1, 1, settings["close_hour"], 0)
-    step = timedelta(minutes=settings["slot_minutes"])
-    while cur < end:
-        all_slots.append(cur.strftime("%I:%M %p").lstrip("0"))
-        cur += step
+    all_slots = _slots_for_windows(day_windows, settings["slot_minutes"])
 
     # If user picked today (in IST), only keep slots that start at least
     # MIN_LEAD_MINUTES from now — so past times never appear.
@@ -815,6 +851,159 @@ async def admin_update_booking(
     return {"success": True, "booking_status": payload.booking_status}
 
 
+# --- Admin: manual create + delete booking ---
+class AdminBookingCreate(BaseModel):
+    service_id: str
+    customer_name: str
+    customer_email: EmailStr
+    customer_phone: str
+    booking_date: Optional[str] = None
+    booking_slot: Optional[str] = None
+    question: Optional[str] = None
+    notes: Optional[str] = None
+    booking_status: str = "confirmed"  # admin-created defaults to confirmed
+    payment_status: str = "paid"  # treat as already collected (offline)
+    service_price_inr: Optional[int] = None  # override price if needed
+
+
+@api_router.post("/admin/bookings")
+async def admin_create_booking(
+    payload: AdminBookingCreate, _admin: str = Depends(verify_admin)
+):
+    """Manually add a booking (e.g. cash payment, bookings taken on call)."""
+    service = await db.services.find_one({"id": payload.service_id}, {"_id": 0})
+    if not service:
+        raise HTTPException(status_code=404, detail="Service not found")
+    booking_id = str(uuid.uuid4())
+    booking = {
+        "id": booking_id,
+        "service_id": payload.service_id,
+        "service_name": service["name"],
+        "service_price_inr": payload.service_price_inr or service["price_inr"],
+        "customer_name": payload.customer_name,
+        "customer_email": payload.customer_email,
+        "customer_phone": payload.customer_phone,
+        "booking_date": payload.booking_date,
+        "booking_slot": payload.booking_slot,
+        "question": payload.question,
+        "notes": payload.notes,
+        "razorpay_order_id": None,
+        "razorpay_payment_id": None,
+        "payment_status": payload.payment_status,
+        "booking_status": payload.booking_status,
+        "is_mock_payment": False,
+        "is_admin_created": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    await db.bookings.insert_one(booking)
+    booking.pop("_id", None)
+    return {"success": True, "booking": booking}
+
+
+@api_router.delete("/admin/bookings/{booking_id}")
+async def admin_delete_booking(
+    booking_id: str, _admin: str = Depends(verify_admin)
+):
+    res = await db.bookings.delete_one({"id": booking_id})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    return {"success": True, "removed": res.deleted_count}
+
+
+# --- CSV exports ---
+def _csv_response(rows: List[List], headers: List[str], filename: str):
+    import csv
+    import io
+    from fastapi.responses import StreamingResponse
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(headers)
+    for r in rows:
+        writer.writerow(r)
+    buf.seek(0)
+    return StreamingResponse(
+        iter([buf.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@api_router.get("/admin/bookings/export")
+async def admin_export_bookings(_admin: str = Depends(verify_admin)):
+    docs = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=5000)
+    headers = [
+        "Booking ID", "Created", "Customer", "Email", "Phone",
+        "Service", "Date", "Slot",
+        "Amount (INR)", "Payment Status", "Booking Status",
+        "Razorpay Order", "Razorpay Payment", "Question", "Notes", "Source",
+    ]
+    rows = [
+        [
+            b.get("id"),
+            b.get("created_at"),
+            b.get("customer_name"),
+            b.get("customer_email"),
+            b.get("customer_phone"),
+            b.get("service_name"),
+            b.get("booking_date") or "",
+            b.get("booking_slot") or "",
+            b.get("service_price_inr"),
+            b.get("payment_status"),
+            b.get("booking_status"),
+            b.get("razorpay_order_id") or "",
+            b.get("razorpay_payment_id") or "",
+            (b.get("question") or "").replace("\n", " "),
+            (b.get("notes") or "").replace("\n", " "),
+            "admin" if b.get("is_admin_created") else "site",
+        ]
+        for b in docs
+    ]
+    fname = f"bookings_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return _csv_response(rows, headers, fname)
+
+
+@api_router.get("/admin/orders/export")
+async def admin_export_orders(_admin: str = Depends(verify_admin)):
+    docs = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=5000)
+    headers = [
+        "Order ID", "Created", "Customer", "Email", "Phone",
+        "Items", "Total (INR)", "Payment Status", "Order Status",
+        "Address", "Razorpay Order", "Razorpay Payment", "Notes",
+    ]
+    rows = []
+    for o in docs:
+        items_str = "; ".join(
+            f"{(it.get('product_name') or '?')} x{it.get('quantity', 1)} (₹{it.get('line_total_inr', 0)})"
+            for it in (o.get("items") or [])
+        )
+        addr = o.get("address") or {}
+        addr_str = ", ".join(
+            filter(None, [
+                addr.get("line1"), addr.get("line2"),
+                addr.get("city"), addr.get("state"),
+                addr.get("postal_code"), addr.get("country"),
+            ])
+        )
+        rows.append([
+            o.get("id"),
+            o.get("created_at"),
+            o.get("customer_name"),
+            o.get("customer_email"),
+            o.get("customer_phone"),
+            items_str,
+            o.get("total_inr"),
+            o.get("payment_status"),
+            o.get("order_status"),
+            addr_str,
+            o.get("razorpay_order_id") or "",
+            o.get("razorpay_payment_id") or "",
+            (o.get("notes") or "").replace("\n", " "),
+        ])
+    fname = f"orders_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.csv"
+    return _csv_response(rows, headers, fname)
+
+
 @api_router.get("/admin/stats")
 async def admin_stats(_admin: str = Depends(verify_admin)):
     total = await db.bookings.count_documents({})
@@ -870,10 +1059,14 @@ async def public_blocked_dates():
 
 # ============== Settings (admin) ==============
 class Settings(BaseModel):
+    # Legacy single-window fields kept for backward-compat with older UI
     open_hour: int = 10
     close_hour: int = 20
     slot_minutes: int = 30
     open_days: List[int] = [0, 1, 2, 3, 4, 5]
+    # New multi-window model: keyed by weekday "0".."6", each is a list of
+    # [start_hour, end_hour] tuples in 24h format, e.g. {"1": [[12,14],[17,19]]}.
+    windows: Optional[Dict[str, List[List[int]]]] = None
 
 
 @api_router.get("/admin/settings")
@@ -885,18 +1078,64 @@ async def admin_get_settings(_admin: str = Depends(verify_admin)):
 async def admin_update_settings(
     payload: Settings, _admin: str = Depends(verify_admin)
 ):
-    if not (0 <= payload.open_hour < 24) or not (0 < payload.close_hour <= 24):
-        raise HTTPException(status_code=400, detail="Hours must be in 0–24 range")
-    if payload.open_hour >= payload.close_hour:
-        raise HTTPException(status_code=400, detail="open_hour must be before close_hour")
     if payload.slot_minutes not in (15, 20, 30, 45, 60, 90, 120):
         raise HTTPException(status_code=400, detail="Slot minutes must be 15/20/30/45/60/90/120")
+
+    # Validate windows when provided. Accept missing days too (treated as closed).
+    cleaned_windows: Dict[str, List[List[int]]] = {}
+    if payload.windows is not None:
+        for day_key, wins in payload.windows.items():
+            if day_key not in {"0", "1", "2", "3", "4", "5", "6"}:
+                raise HTTPException(status_code=400, detail=f"Bad day key: {day_key}")
+            day_clean: List[List[int]] = []
+            for w in wins or []:
+                if not isinstance(w, (list, tuple)) or len(w) != 2:
+                    raise HTTPException(status_code=400, detail="Window must be [start,end]")
+                start_h, end_h = int(w[0]), int(w[1])
+                if not (0 <= start_h < 24) or not (0 < end_h <= 24):
+                    raise HTTPException(status_code=400, detail="Window hours must be in 0–24")
+                if start_h >= end_h:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=f"Window start ({start_h}) must be before end ({end_h})",
+                    )
+                day_clean.append([start_h, end_h])
+            cleaned_windows[day_key] = day_clean
+    else:
+        # No windows posted — synthesise from legacy fields so DB stays consistent.
+        if not (0 <= payload.open_hour < 24) or not (0 < payload.close_hour <= 24):
+            raise HTTPException(status_code=400, detail="Hours must be in 0–24 range")
+        if payload.open_hour >= payload.close_hour:
+            raise HTTPException(
+                status_code=400, detail="open_hour must be before close_hour"
+            )
+        legacy = [[payload.open_hour, payload.close_hour]]
+        for d in range(7):
+            cleaned_windows[str(d)] = list(legacy) if d in payload.open_days else []
+
+    # Derive sensible legacy values from the first non-empty window so older
+    # callers still get reasonable open_hour/close_hour/open_days.
+    derived_open_days = [d for d in range(7) if cleaned_windows.get(str(d))]
+    first_day_with_window = next(
+        (cleaned_windows[str(d)] for d in derived_open_days),
+        [[10, 20]],
+    )
+    derived_open_hour = min(w[0] for w in first_day_with_window)
+    derived_close_hour = max(w[1] for w in first_day_with_window)
+
+    doc = {
+        "open_hour": derived_open_hour,
+        "close_hour": derived_close_hour,
+        "slot_minutes": payload.slot_minutes,
+        "open_days": derived_open_days,
+        "windows": cleaned_windows,
+    }
     await db.settings.update_one(
         {"_id": "main"},
-        {"$set": payload.model_dump()},
+        {"$set": doc},
         upsert=True,
     )
-    return {"success": True, **payload.model_dump()}
+    return {"success": True, **doc}
 
 
 # ============== Categories CRUD (admin) ==============

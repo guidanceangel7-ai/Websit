@@ -16,6 +16,9 @@ import {
   Filter,
   Check,
   ChevronDown,
+  Download,
+  Trash2,
+  UserPlus,
 } from "lucide-react";
 import {
   Table,
@@ -82,6 +85,21 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // all | paid | pending | failed
   const [statusFilter, setStatusFilter] = useState("all"); // all | confirmed | completed | cancelled | no_show | pending
+  const [services, setServices] = useState([]);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createForm, setCreateForm] = useState({
+    service_id: "",
+    customer_name: "",
+    customer_email: "",
+    customer_phone: "",
+    booking_date: "",
+    booking_slot: "",
+    question: "",
+    notes: "",
+    booking_status: "confirmed",
+    payment_status: "paid",
+  });
+  const [creating, setCreating] = useState(false);
 
   const token =
     typeof window !== "undefined" ? localStorage.getItem("ga_admin_token") : null;
@@ -99,14 +117,16 @@ export default function AdminDashboard() {
   const refresh = async () => {
     setLoading(true);
     try {
-      const [s, b, bd] = await Promise.all([
+      const [s, b, bd, sv] = await Promise.all([
         axios.get(`${API}/admin/stats`, { headers }),
         axios.get(`${API}/admin/bookings`, { headers }),
         axios.get(`${API}/admin/blocked-dates`, { headers }),
+        axios.get(`${API}/services`),
       ]);
       setStats(s.data);
       setBookings(b.data || []);
       setBlockedDates(bd.data || []);
+      setServices(sv.data || []);
     } catch (e) {
       if (e?.response?.status === 401) {
         localStorage.removeItem("ga_admin_token");
@@ -157,6 +177,99 @@ export default function AdminDashboard() {
       refresh();
     } catch {
       toast.error("Could not update");
+    }
+  };
+
+  const deleteBooking = async (b) => {
+    if (
+      !window.confirm(
+        `Delete booking for "${b.customer_name}" (${b.service_name})?\n\nThis is irreversible.`
+      )
+    )
+      return;
+    try {
+      await axios.delete(`${API}/admin/bookings/${b.id}`, { headers });
+      toast.success("Booking deleted");
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not delete");
+    }
+  };
+
+  const downloadFile = async (url, fallbackName) => {
+    try {
+      const res = await axios.get(url, {
+        headers,
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], { type: "text/csv;charset=utf-8" });
+      const cd = res.headers["content-disposition"] || "";
+      const m = cd.match(/filename="?([^"]+)"?/);
+      const fname = (m && m[1]) || fallbackName;
+      const link = document.createElement("a");
+      link.href = window.URL.createObjectURL(blob);
+      link.download = fname;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(link.href);
+      toast.success(`Downloaded ${fname}`);
+    } catch (e) {
+      toast.error("Download failed");
+    }
+  };
+
+  const submitCreateBooking = async (e) => {
+    e?.preventDefault();
+    if (!createForm.service_id) {
+      toast.error("Pick a service");
+      return;
+    }
+    if (
+      !createForm.customer_name ||
+      !createForm.customer_email ||
+      !createForm.customer_phone
+    ) {
+      toast.error("Customer name, email and phone are required");
+      return;
+    }
+    setCreating(true);
+    try {
+      await axios.post(
+        `${API}/admin/bookings`,
+        {
+          service_id: createForm.service_id,
+          customer_name: createForm.customer_name,
+          customer_email: createForm.customer_email,
+          customer_phone: createForm.customer_phone,
+          booking_date: createForm.booking_date || null,
+          booking_slot: createForm.booking_slot || null,
+          question: createForm.question || null,
+          notes: createForm.notes || null,
+          booking_status: createForm.booking_status,
+          payment_status: createForm.payment_status,
+        },
+        { headers }
+      );
+      toast.success("Booking added ✦");
+      setCreateOpen(false);
+      setCreateForm({
+        service_id: "",
+        customer_name: "",
+        customer_email: "",
+        customer_phone: "",
+        booking_date: "",
+        booking_slot: "",
+        question: "",
+        notes: "",
+        booking_status: "confirmed",
+        payment_status: "paid",
+      });
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not add booking");
+    } finally {
+      setCreating(false);
     }
   };
 
@@ -256,6 +369,32 @@ export default function AdminDashboard() {
           </TabsList>
 
           <TabsContent value="bookings" className="mt-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+              <div className="text-xs uppercase tracking-[0.22em] text-peach-deep font-bold">
+                ✦ Bookings
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  data-testid="bookings-export-csv"
+                  onClick={() =>
+                    downloadFile(
+                      `${API}/admin/bookings/export`,
+                      "bookings.csv"
+                    )
+                  }
+                  className="inline-flex items-center gap-2 rounded-full border border-peach/40 bg-white px-4 py-2 text-sm hover:bg-peach/10"
+                >
+                  <Download size={14} /> Download CSV
+                </button>
+                <button
+                  data-testid="bookings-add-btn"
+                  onClick={() => setCreateOpen(true)}
+                  className="inline-flex items-center gap-2 rounded-full bg-lavender-deep text-ivory px-4 py-2 text-sm hover:bg-lavender-deeper"
+                >
+                  <UserPlus size={14} /> Add Booking
+                </button>
+              </div>
+            </div>
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             ["Total bookings", stats?.total_bookings ?? "—"],
@@ -531,7 +670,7 @@ export default function AdminDashboard() {
                     </DropdownMenu>
                   </TableCell>
                   <TableCell>
-                    <div className="flex gap-2">
+                    <div className="flex gap-1.5 flex-wrap">
                       <a
                         href={`https://wa.me/${b.customer_phone.replace(/\D/g, "")}`}
                         target="_blank"
@@ -555,6 +694,15 @@ export default function AdminDashboard() {
                       >
                         <Phone size={14} />
                       </a>
+                      <button
+                        type="button"
+                        data-testid={`booking-delete-${b.id}`}
+                        onClick={() => deleteBooking(b)}
+                        className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100"
+                        title="Delete booking"
+                      >
+                        <Trash2 size={14} />
+                      </button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -593,6 +741,220 @@ export default function AdminDashboard() {
         </TabsContent>
         </Tabs>
       </main>
+
+      {/* Add booking dialog */}
+      {createOpen && (
+        <div
+          data-testid="add-booking-dialog"
+          className="fixed inset-0 z-[80] flex items-center justify-center bg-ink-plum/40 backdrop-blur-sm p-4 overflow-y-auto"
+          onClick={() => setCreateOpen(false)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-2xl bg-white rounded-3xl border border-peach/30 shadow-soft-xl my-8"
+          >
+            <div className="px-6 py-4 border-b border-peach/30 flex items-center justify-between bg-ivory-deep/40 rounded-t-3xl">
+              <div>
+                <div className="text-[10px] uppercase tracking-[0.32em] text-peach-deep font-bold">
+                  ✦ Manual Entry
+                </div>
+                <h3 className="font-display text-xl text-ink-plum">
+                  Add a booking
+                </h3>
+              </div>
+              <button
+                onClick={() => setCreateOpen(false)}
+                className="w-8 h-8 inline-flex items-center justify-center rounded-full hover:bg-peach/20 text-ink-plum/60"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <form onSubmit={submitCreateBooking} className="p-6 space-y-4">
+              <div>
+                <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                  Service *
+                </label>
+                <select
+                  data-testid="add-booking-service"
+                  value={createForm.service_id}
+                  onChange={(e) =>
+                    setCreateForm({ ...createForm, service_id: e.target.value })
+                  }
+                  className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 text-ink-plum focus:border-lavender-deep outline-none"
+                  required
+                >
+                  <option value="">— Pick a service —</option>
+                  {services.map((sv) => (
+                    <option key={sv.id} value={sv.id}>
+                      {sv.name} · ₹{sv.price_inr}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Customer name *
+                  </label>
+                  <input
+                    data-testid="add-booking-name"
+                    value={createForm.customer_name}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, customer_name: e.target.value })
+                    }
+                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Phone *
+                  </label>
+                  <input
+                    data-testid="add-booking-phone"
+                    value={createForm.customer_phone}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, customer_phone: e.target.value })
+                    }
+                    placeholder="+91…"
+                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
+                    required
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    data-testid="add-booking-email"
+                    value={createForm.customer_email}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, customer_email: e.target.value })
+                    }
+                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Date{" "}
+                    <span className="text-ink-plum/40 normal-case tracking-normal text-[10px]">
+                      (yyyy-mm-dd)
+                    </span>
+                  </label>
+                  <input
+                    data-testid="add-booking-date"
+                    type="date"
+                    value={createForm.booking_date}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, booking_date: e.target.value })
+                    }
+                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Slot{" "}
+                    <span className="text-ink-plum/40 normal-case tracking-normal text-[10px]">
+                      (e.g. 11:00 AM)
+                    </span>
+                  </label>
+                  <input
+                    data-testid="add-booking-slot"
+                    value={createForm.booking_slot}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, booking_slot: e.target.value })
+                    }
+                    placeholder="11:00 AM"
+                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Booking status
+                  </label>
+                  <select
+                    data-testid="add-booking-status"
+                    value={createForm.booking_status}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, booking_status: e.target.value })
+                    }
+                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
+                  >
+                    {STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Payment status
+                  </label>
+                  <select
+                    data-testid="add-booking-payment"
+                    value={createForm.payment_status}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, payment_status: e.target.value })
+                    }
+                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
+                  >
+                    <option value="paid">Paid (offline / cash)</option>
+                    <option value="pending">Pending</option>
+                    <option value="failed">Failed</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Customer's question / context
+                  </label>
+                  <textarea
+                    data-testid="add-booking-question"
+                    rows={2}
+                    value={createForm.question}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, question: e.target.value })
+                    }
+                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Internal notes
+                  </label>
+                  <input
+                    data-testid="add-booking-notes"
+                    value={createForm.notes}
+                    onChange={(e) =>
+                      setCreateForm({ ...createForm, notes: e.target.value })
+                    }
+                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
+                  />
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-2 border-t border-peach/20">
+                <button
+                  type="button"
+                  onClick={() => setCreateOpen(false)}
+                  className="rounded-full border border-peach/40 bg-white px-5 py-2 text-sm hover:bg-peach/10"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  data-testid="add-booking-submit"
+                  disabled={creating}
+                  className="rounded-full bg-lavender-deep text-ivory px-5 py-2 text-sm hover:bg-lavender-deeper disabled:opacity-60"
+                >
+                  {creating ? "Saving…" : "Save Booking"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

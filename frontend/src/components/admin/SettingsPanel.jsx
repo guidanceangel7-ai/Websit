@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
-import { Loader2, Save } from "lucide-react";
+import { Loader2, Save, Plus, X } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -18,37 +18,97 @@ const DAYS = [
 const SLOT_OPTIONS = [15, 20, 30, 45, 60, 90, 120];
 const HOURS = Array.from({ length: 25 }).map((_, i) => i);
 
+function fmtHour(h) {
+  if (h === 0) return "12 AM";
+  if (h === 12) return "12 PM";
+  if (h === 24) return "12 AM";
+  return h < 12 ? `${h} AM` : `${h - 12} PM`;
+}
+
 export default function SettingsPanel({ token }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [s, setS] = useState({
-    open_hour: 10,
-    close_hour: 20,
-    slot_minutes: 30,
-    open_days: [0, 1, 2, 3, 4, 5],
-  });
+  const [slotMinutes, setSlotMinutes] = useState(30);
+  // windows is a 7-length array; each entry is a list of [start, end] pairs.
+  const [windows, setWindows] = useState(
+    Array.from({ length: 7 }).map(() => [])
+  );
 
   useEffect(() => {
     axios
-      .get(`${API}/admin/settings`, { headers: { Authorization: `Bearer ${token}` } })
-      .then((r) => setS(r.data))
+      .get(`${API}/admin/settings`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      .then((r) => {
+        const data = r.data || {};
+        setSlotMinutes(data.slot_minutes || 30);
+        const wmap = data.windows || {};
+        setWindows(
+          Array.from({ length: 7 }).map((_, d) =>
+            (wmap[String(d)] || []).map(([a, b]) => [a, b])
+          )
+        );
+      })
       .catch(() => toast.error("Could not load settings"))
       .finally(() => setLoading(false));
   }, [token]);
 
-  const toggleDay = (d) => {
-    const set = new Set(s.open_days);
-    if (set.has(d)) set.delete(d);
-    else set.add(d);
-    setS({ ...s, open_days: Array.from(set).sort() });
+  const addWindow = (d) => {
+    const next = windows.map((arr) => [...arr]);
+    // sensible default — pick a 1-hour slot starting at 10 AM if empty,
+    // else right after the previous window's end.
+    const last = next[d][next[d].length - 1];
+    const start = last ? Math.min(last[1], 22) : 10;
+    next[d].push([start, Math.min(start + 1, 23)]);
+    setWindows(next);
+  };
+
+  const removeWindow = (d, idx) => {
+    const next = windows.map((arr) => [...arr]);
+    next[d].splice(idx, 1);
+    setWindows(next);
+  };
+
+  const updateWindow = (d, idx, which, value) => {
+    const next = windows.map((arr) => arr.map((w) => [...w]));
+    next[d][idx][which] = parseInt(value);
+    setWindows(next);
+  };
+
+  const copyToAllWeekdays = (d) => {
+    const src = (windows[d] || []).map((w) => [...w]);
+    const next = windows.map((arr, i) =>
+      i >= 0 && i <= 4 ? src.map((w) => [...w]) : arr
+    );
+    setWindows(next);
+    toast.success("Copied to weekdays (Mon–Fri)");
   };
 
   const save = async () => {
     setSaving(true);
     try {
-      await axios.put(`${API}/admin/settings`, s, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      // client-side validation
+      for (let d = 0; d < 7; d++) {
+        for (const w of windows[d]) {
+          if (!Array.isArray(w) || w.length !== 2) continue;
+          if (w[0] >= w[1]) {
+            toast.error(
+              `${DAYS[d].label}: window start (${fmtHour(w[0])}) must be before end (${fmtHour(w[1])})`
+            );
+            setSaving(false);
+            return;
+          }
+        }
+      }
+      const windowsMap = {};
+      for (let d = 0; d < 7; d++) {
+        windowsMap[String(d)] = (windows[d] || []).map(([a, b]) => [a, b]);
+      }
+      await axios.put(
+        `${API}/admin/settings`,
+        { slot_minutes: slotMinutes, windows: windowsMap },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       toast.success("Working hours saved ✦");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to save");
@@ -70,7 +130,8 @@ export default function SettingsPanel({ token }) {
         <div>
           <h2 className="font-display text-2xl text-ink-plum">Working Hours</h2>
           <p className="text-sm text-ink-plum/60 mt-1">
-            Customers will only see slots within these hours.
+            Add multiple time windows per day (e.g. 12&nbsp;PM – 2&nbsp;PM and
+            5&nbsp;PM – 7&nbsp;PM). A day with no window is automatically closed.
           </p>
         </div>
         <button
@@ -84,82 +145,133 @@ export default function SettingsPanel({ token }) {
         </button>
       </div>
 
-      <div className="mt-6 grid sm:grid-cols-3 gap-5">
-        <div>
-          <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep font-semibold">
-            Open hour
-          </label>
-          <select
-            data-testid="settings-open-hour"
-            value={s.open_hour}
-            onChange={(e) => setS({ ...s, open_hour: parseInt(e.target.value) })}
-            className="mt-2 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 text-ink-plum focus:border-lavender-deep outline-none"
-          >
-            {HOURS.slice(0, 24).map((h) => (
-              <option key={h} value={h}>
-                {h.toString().padStart(2, "0")}:00 ({h < 12 ? "AM" : "PM"})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep font-semibold">
-            Close hour
-          </label>
-          <select
-            data-testid="settings-close-hour"
-            value={s.close_hour}
-            onChange={(e) => setS({ ...s, close_hour: parseInt(e.target.value) })}
-            className="mt-2 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 text-ink-plum focus:border-lavender-deep outline-none"
-          >
-            {HOURS.slice(1, 25).map((h) => (
-              <option key={h} value={h}>
-                {h.toString().padStart(2, "0")}:00 ({h < 12 ? "AM" : "PM"})
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep font-semibold">
-            Slot length
-          </label>
-          <select
-            data-testid="settings-slot-mins"
-            value={s.slot_minutes}
-            onChange={(e) => setS({ ...s, slot_minutes: parseInt(e.target.value) })}
-            className="mt-2 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 text-ink-plum focus:border-lavender-deep outline-none"
-          >
-            {SLOT_OPTIONS.map((m) => (
-              <option key={m} value={m}>{m} minutes</option>
-            ))}
-          </select>
-        </div>
+      <div className="mt-6">
+        <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep font-semibold">
+          Slot length
+        </label>
+        <select
+          data-testid="settings-slot-mins"
+          value={slotMinutes}
+          onChange={(e) => setSlotMinutes(parseInt(e.target.value))}
+          className="mt-2 w-full sm:w-48 rounded-xl border-2 border-peach/30 bg-white px-3 py-2 text-ink-plum focus:border-lavender-deep outline-none"
+        >
+          {SLOT_OPTIONS.map((m) => (
+            <option key={m} value={m}>
+              {m} minutes
+            </option>
+          ))}
+        </select>
       </div>
 
-      <div className="mt-7">
-        <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep font-semibold">
-          Open days
-        </label>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {DAYS.map((d) => {
-            const active = s.open_days.includes(d.v);
-            return (
-              <button
-                key={d.v}
-                type="button"
-                data-testid={`settings-day-${d.label.toLowerCase()}`}
-                onClick={() => toggleDay(d.v)}
-                className={`px-4 py-2 rounded-full border-2 text-sm font-medium transition ${
-                  active
-                    ? "bg-lavender-deep text-ivory border-lavender-deep shadow-[0_4px_12px_rgba(107,91,149,0.3)]"
-                    : "bg-white border-peach/40 text-ink-plum hover:border-lavender-deep"
-                }`}
-              >
-                {d.label}
-              </button>
-            );
-          })}
-        </div>
+      <div className="mt-7 space-y-3">
+        {DAYS.map((d) => {
+          const wins = windows[d.v] || [];
+          const isClosed = wins.length === 0;
+          return (
+            <div
+              key={d.v}
+              data-testid={`settings-day-row-${d.label.toLowerCase()}`}
+              className={`rounded-2xl border-2 p-4 transition ${
+                isClosed
+                  ? "bg-ivory-deep/40 border-peach/20"
+                  : "bg-white border-peach/30"
+              }`}
+            >
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <div
+                    className={`w-12 text-center rounded-full py-1 text-sm font-semibold ${
+                      isClosed
+                        ? "bg-ivory-deep text-ink-plum/40"
+                        : "bg-lavender-deep text-ivory"
+                    }`}
+                  >
+                    {d.label}
+                  </div>
+                  <span className="text-xs text-ink-plum/60">
+                    {isClosed
+                      ? "Closed"
+                      : `${wins.length} window${wins.length > 1 ? "s" : ""}`}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {d.v <= 4 && wins.length > 0 && (
+                    <button
+                      type="button"
+                      data-testid={`settings-day-copy-${d.label.toLowerCase()}`}
+                      onClick={() => copyToAllWeekdays(d.v)}
+                      className="text-[11px] tracking-wide text-ink-plum/60 hover:text-lavender-deep"
+                    >
+                      Copy to Mon–Fri
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    data-testid={`settings-day-add-${d.label.toLowerCase()}`}
+                    onClick={() => addWindow(d.v)}
+                    className="inline-flex items-center gap-1 rounded-full bg-peach/20 hover:bg-peach/30 text-peach-deep px-3 py-1 text-xs font-semibold"
+                  >
+                    <Plus size={12} /> Window
+                  </button>
+                </div>
+              </div>
+
+              {wins.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  {wins.map((w, idx) => (
+                    <div
+                      key={`${d.v}-${idx}`}
+                      data-testid={`settings-window-${d.label.toLowerCase()}-${idx}`}
+                      className="flex flex-wrap items-center gap-2 bg-ivory-deep/40 rounded-xl px-3 py-2"
+                    >
+                      <span className="text-[10px] tracking-[0.22em] uppercase text-peach-deep/80 font-semibold">
+                        From
+                      </span>
+                      <select
+                        value={w[0]}
+                        onChange={(e) =>
+                          updateWindow(d.v, idx, 0, e.target.value)
+                        }
+                        className="rounded-lg border border-peach/30 bg-white px-2 py-1 text-sm"
+                      >
+                        {HOURS.slice(0, 24).map((h) => (
+                          <option key={h} value={h}>
+                            {fmtHour(h)}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="text-[10px] tracking-[0.22em] uppercase text-peach-deep/80 font-semibold">
+                        to
+                      </span>
+                      <select
+                        value={w[1]}
+                        onChange={(e) =>
+                          updateWindow(d.v, idx, 1, e.target.value)
+                        }
+                        className="rounded-lg border border-peach/30 bg-white px-2 py-1 text-sm"
+                      >
+                        {HOURS.slice(1, 25).map((h) => (
+                          <option key={h} value={h}>
+                            {fmtHour(h)}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        data-testid={`settings-window-remove-${d.label.toLowerCase()}-${idx}`}
+                        onClick={() => removeWindow(d.v, idx)}
+                        className="ml-auto w-7 h-7 inline-flex items-center justify-center rounded-full text-ink-plum/60 hover:bg-white hover:text-rose-500"
+                        title="Remove window"
+                      >
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

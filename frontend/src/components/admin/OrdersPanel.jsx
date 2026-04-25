@@ -11,6 +11,7 @@ import {
   Check,
   Filter,
   Package,
+  Download,
 } from "lucide-react";
 import {
   Table,
@@ -151,6 +152,34 @@ export default function OrdersPanel({ token }) {
             )}
           </div>
           <div className="ml-auto inline-flex items-center gap-2">
+            <button
+              data-testid="orders-export-csv"
+              onClick={async () => {
+                try {
+                  const r = await axios.get(`${API}/admin/orders/export`, {
+                    headers: { Authorization: `Bearer ${token}` },
+                    responseType: "blob",
+                  });
+                  const blob = new Blob([r.data], { type: "text/csv;charset=utf-8" });
+                  const cd = r.headers["content-disposition"] || "";
+                  const m = cd.match(/filename="?([^"]+)"?/);
+                  const fname = (m && m[1]) || "orders.csv";
+                  const link = document.createElement("a");
+                  link.href = window.URL.createObjectURL(blob);
+                  link.download = fname;
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  window.URL.revokeObjectURL(link.href);
+                  toast.success(`Downloaded ${fname}`);
+                } catch {
+                  toast.error("Download failed");
+                }
+              }}
+              className="inline-flex items-center gap-2 rounded-full border border-peach/40 bg-white px-3 py-1.5 text-xs hover:bg-peach/10"
+            >
+              <Download size={12} /> CSV
+            </button>
             <button
               data-testid="orders-refresh"
               onClick={refresh}
