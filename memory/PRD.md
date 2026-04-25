@@ -69,7 +69,22 @@
 - Yearly horoscope blog with rich SEO
 
 ## Recent Changes (this session)
-**2026-04-25** — Shop Category Management completion:
+
+**2026-04-25 (later)** — Visible promo codes during checkout:
+1. Created reusable `AvailableOffers` component that fetches `/api/promotions/active`,
+   filters by `kind` (services / products), and shows each code prominently with
+   "Copy" and "Tap to apply" buttons.
+2. Wired into the **BookingDialog** payment step (filter: services_only + site_wide)
+   and into the **ShopCheckoutDialog** payment step (filter: products_only + site_wide).
+3. Refactored `applyCoupon(codeArg)` in both dialogs to accept an explicit code so the
+   tap-to-apply button can populate + validate in one click.
+4. Sticky banner: SpecialOfferBanner is now `position: fixed top:0 z-[60]` and
+   coordinates with Header (which uses `top: var(--banner-h, 0px)`) so the banner
+   stays visible during scroll without overlapping the header. Page content reserves
+   the same offset via `<main style={{ paddingTop: 'var(--banner-h, 0px)' }}>`.
+   Dismissing the banner smoothly slides the header back to top:0.
+
+**2026-04-25 (earlier)** — Shop Category Management completion:
 1. Wired `ProductCategoriesPanel` into `AdminDashboard.jsx` as the new "Shop Categories" tab
    (renamed the existing service-categories tab to "Service Categories" for clarity)
 2. Added `Shop category` dropdown in the Add/Edit Product form so admin can pick a
