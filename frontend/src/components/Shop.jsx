@@ -119,15 +119,21 @@ function CategoryHeader({ cat, count }) {
 
 export default function Shop() {
   const [categories, setCategories] = useState([]);
+  const [tags, setTags] = useState([]);
+  const [activeTag, setActiveTag] = useState(null);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState(null);
 
   useEffect(() => {
     let alive = true;
-    axios
-      .get(`${API}/product-categories`)
-      .then((r) => {
-        if (alive) setCategories(Array.isArray(r.data) ? r.data : []);
+    Promise.all([
+      axios.get(`${API}/product-categories`),
+      axios.get(`${API}/tags`),
+    ])
+      .then(([c, t]) => {
+        if (!alive) return;
+        setCategories(Array.isArray(c.data) ? c.data : []);
+        setTags(Array.isArray(t.data) ? t.data : []);
       })
       .catch(() => {});
     return () => {
@@ -140,9 +146,18 @@ export default function Shop() {
     setOpen(true);
   };
 
-  const featured = categories
-    .flatMap((c) => c.products || [])
-    .find((p) => p.in_stock !== false && p.price_inr);
+  // Flatten when a tag is active so customers see ALL items with that intent
+  // across every category (e.g. money → bracelet + oil + candle).
+  const allProducts = categories.flatMap((c) =>
+    (c.products || []).map((p) => ({ ...p, _categoryName: c.name }))
+  );
+  const taggedProducts = activeTag
+    ? allProducts.filter((p) =>
+        Array.isArray(p.tags) ? p.tags.includes(activeTag) : false
+      )
+    : [];
+
+  const featured = allProducts.find((p) => p.in_stock !== false && p.price_inr);
 
   return (
     <section
@@ -211,23 +226,96 @@ export default function Shop() {
           </motion.div>
         </div>
 
-        {/* Categories with their products */}
-        <div className="mt-14 sm:mt-16 space-y-14">
+        {/* Tag filter row — cross-category browse (money / love / protection / …) */}
+        {tags.length > 0 && (
+          <div
+            data-testid="shop-tag-filter"
+            className="mt-14 sm:mt-16 flex flex-wrap items-center gap-2 sm:gap-3"
+          >
+            <span className="text-[10px] tracking-[0.32em] uppercase text-peach-deep font-bold mr-1">
+              ✦ Browse by intention
+            </span>
+            <button
+              data-testid="shop-tag-all"
+              onClick={() => setActiveTag(null)}
+              className={`px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border transition ${
+                activeTag === null
+                  ? "bg-lavender-deep text-ivory border-lavender-deep shadow-[0_4px_14px_rgba(107,91,149,0.3)]"
+                  : "bg-white border-peach/40 text-ink-plum hover:border-lavender-deep"
+              }`}
+            >
+              All
+            </button>
+            {tags.map((t) => {
+              const active = activeTag === t.slug;
+              return (
+                <button
+                  key={t.slug}
+                  data-testid={`shop-tag-${t.slug}`}
+                  onClick={() => setActiveTag(active ? null : t.slug)}
+                  className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold tracking-wide border transition capitalize ${
+                    active
+                      ? "bg-lavender-deep text-ivory border-lavender-deep shadow-[0_4px_14px_rgba(107,91,149,0.3)]"
+                      : "bg-white border-peach/40 text-ink-plum hover:border-lavender-deep"
+                  }`}
+                >
+                  {t.slug}
+                  <span className={`text-[10px] ${active ? "text-ivory/70" : "text-ink-plum/40"}`}>
+                    {t.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Categories with their products — OR flat tag-filtered grid */}
+        <div className={`${tags.length > 0 ? "mt-6" : "mt-14 sm:mt-16"} space-y-14`}>
           {categories.length === 0 && (
             <div className="text-center py-10 text-ink-plum/60">
               Sacred shop coming soon — check back in a bit ✦
             </div>
           )}
-          {categories.map((cat) =>
-            (cat.products || []).length === 0 ? null : (
-              <div key={cat.id}>
-                <CategoryHeader cat={cat} count={cat.products.length} />
+
+          {activeTag ? (
+            <div data-testid="shop-tag-results">
+              <div className="flex items-center justify-between flex-wrap gap-3 mb-6">
+                <div>
+                  <div className="text-[10px] tracking-[0.32em] uppercase text-peach-deep font-bold">
+                    ✦ Tagged
+                  </div>
+                  <h3 className="font-display text-2xl sm:text-3xl text-ink-plum capitalize">
+                    {activeTag}
+                  </h3>
+                </div>
+                <div className="text-[11px] tracking-[0.22em] uppercase text-peach-deep font-semibold">
+                  {taggedProducts.length} item{taggedProducts.length !== 1 ? "s" : ""}
+                </div>
+              </div>
+              {taggedProducts.length === 0 ? (
+                <div className="text-center py-10 text-ink-plum/60 italic">
+                  No products with this tag yet.
+                </div>
+              ) : (
                 <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {cat.products.map((p, i) => (
+                  {taggedProducts.map((p, i) => (
                     <ProductCard key={p.id} p={p} index={i} onBuy={buyNow} />
                   ))}
                 </div>
-              </div>
+              )}
+            </div>
+          ) : (
+            categories.map((cat) =>
+              (cat.products || []).length === 0 ? null : (
+                <div key={cat.id}>
+                  <CategoryHeader cat={cat} count={cat.products.length} />
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                    {cat.products.map((p, i) => (
+                      <ProductCard key={p.id} p={p} index={i} onBuy={buyNow} />
+                    ))}
+                  </div>
+                </div>
+              )
             )
           )}
         </div>

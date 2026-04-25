@@ -43,6 +43,18 @@ const EMPTY = {
   shop_url: "",
   order: 100,
   product_category_id: "",
+  tags: [],
+};
+
+const slugifyTag = (raw) => {
+  if (!raw) return "";
+  return String(raw)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9\-_/ ]+/g, "")
+    .replace(/[\s_/]+/g, "-")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-+|-+$/g, "");
 };
 
 export default function ProductsPanel({ token }) {
@@ -90,7 +102,12 @@ export default function ProductsPanel({ token }) {
         : p.image_url
           ? [p.image_url]
           : [];
-    setForm({ ...EMPTY, ...p, images: initialImages });
+    setForm({
+      ...EMPTY,
+      ...p,
+      images: initialImages,
+      tags: Array.isArray(p.tags) ? p.tags : [],
+    });
     setOpen(true);
   };
 
@@ -103,6 +120,13 @@ export default function ProductsPanel({ token }) {
     setSubmitting(true);
     try {
       const images = (form.images || []).filter(Boolean).slice(0, MAX_IMAGES);
+      const tags = Array.from(
+        new Set(
+          (form.tags || [])
+            .map((t) => slugifyTag(t))
+            .filter(Boolean)
+        )
+      );
       const payload = {
         ...form,
         price_inr: form.price_inr ? parseInt(form.price_inr) : null,
@@ -111,6 +135,7 @@ export default function ProductsPanel({ token }) {
         product_category_id: form.product_category_id || null,
         images,
         image_url: images[0] || null,
+        tags,
       };
       if (editing) {
         await axios.put(`${API}/admin/products/${editing.id}`, payload, {
@@ -287,6 +312,19 @@ export default function ProductsPanel({ token }) {
                   ) : (
                     <span className="text-[10px] tracking-[0.2em] uppercase bg-peach/15 text-peach-deep px-2 py-0.5 rounded-full font-bold">
                       Uncategorised
+                    </span>
+                  )}
+                  {(p.tags || []).slice(0, 4).map((t) => (
+                    <span
+                      key={`${p.id}-tag-${t}`}
+                      className="inline-flex items-center text-[10px] tracking-wide bg-peach/15 text-peach-deep px-2 py-0.5 rounded-full"
+                    >
+                      ✦ {t}
+                    </span>
+                  ))}
+                  {(p.tags || []).length > 4 && (
+                    <span className="text-[10px] text-ink-plum/50">
+                      +{p.tags.length - 4}
                     </span>
                   )}
                 </div>
@@ -551,6 +589,83 @@ export default function ProductsPanel({ token }) {
                       No shop categories yet. Create them under "Shop Categories" tab first.
                     </p>
                   )}
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Tags{" "}
+                    <span className="text-ink-plum/50 normal-case tracking-normal text-[10px]">
+                      (cross-category — e.g. money, love, protection. Press Enter or comma to add)
+                    </span>
+                  </label>
+                  <div
+                    data-testid="product-input-tags"
+                    className="mt-1.5 flex flex-wrap items-center gap-1.5 rounded-xl border-2 border-peach/30 bg-white px-2.5 py-2 focus-within:border-lavender-deep"
+                  >
+                    {(form.tags || []).map((t, i) => (
+                      <span
+                        key={`${t}-${i}`}
+                        data-testid={`product-tag-${t}`}
+                        className="inline-flex items-center gap-1 rounded-full bg-lavender-deep/10 text-lavender-deep px-2.5 py-0.5 text-[11px] font-bold tracking-wide"
+                      >
+                        ✦ {t}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setForm({
+                              ...form,
+                              tags: form.tags.filter((_, idx) => idx !== i),
+                            })
+                          }
+                          className="text-lavender-deep/70 hover:text-lavender-deep"
+                          title="Remove tag"
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ))}
+                    <input
+                      data-testid="product-input-tags-input"
+                      type="text"
+                      placeholder={
+                        (form.tags || []).length === 0
+                          ? "money, love, protection…"
+                          : "Add tag…"
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === ",") {
+                          e.preventDefault();
+                          const slug = slugifyTag(e.target.value);
+                          if (slug && !(form.tags || []).includes(slug)) {
+                            setForm({
+                              ...form,
+                              tags: [...(form.tags || []), slug],
+                            });
+                          }
+                          e.target.value = "";
+                        } else if (
+                          e.key === "Backspace" &&
+                          !e.target.value &&
+                          (form.tags || []).length > 0
+                        ) {
+                          setForm({
+                            ...form,
+                            tags: form.tags.slice(0, -1),
+                          });
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const slug = slugifyTag(e.target.value);
+                        if (slug && !(form.tags || []).includes(slug)) {
+                          setForm({
+                            ...form,
+                            tags: [...(form.tags || []), slug],
+                          });
+                        }
+                        e.target.value = "";
+                      }}
+                      className="flex-1 min-w-[120px] bg-transparent outline-none text-sm py-1"
+                    />
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">

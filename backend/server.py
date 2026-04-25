@@ -427,27 +427,27 @@ SEED_PRODUCT_CATEGORIES = [
 
 SEED_PRODUCTS = [
     # Candles (variants)
-    {"id": "candle-money", "product_category_id": "candles", "name": "Money Candle", "blurb": "Citrine + bay-leaf candle to align you with abundance, prosperity and overflow. Burn during a new-moon.", "price_inr": 799, "badge": "Bestseller", "image_url": None, "accent": "from-[#EBB99A] to-[#F4C6D6]", "in_stock": True, "order": 1},
-    {"id": "candle-love", "product_category_id": "candles", "name": "Love Candle", "blurb": "Rose-quartz + jasmine candle to draw in self-love, romance and harmonious relationships.", "price_inr": 799, "badge": "Most Loved", "image_url": None, "accent": "from-[#F4C6D6] to-[#FBE4D5]", "in_stock": True, "order": 2},
-    {"id": "candle-protection", "product_category_id": "candles", "name": "Protection Candle", "blurb": "Black tourmaline + sage candle to shield your aura, clear negative energy and protect your space.", "price_inr": 899, "badge": None, "image_url": None, "accent": "from-[#9B8AC4] to-[#6B5B95]", "in_stock": True, "order": 3},
-    {"id": "candle-clarity", "product_category_id": "candles", "name": "Clarity Candle", "blurb": "Clear quartz + lavender candle to dissolve confusion and bring crystal-clear answers.", "price_inr": 799, "badge": "New", "image_url": None, "accent": "from-[#C8B6E2] to-[#E6DDF1]", "in_stock": True, "order": 4},
+    {"id": "candle-money", "product_category_id": "candles", "name": "Money Candle", "blurb": "Citrine + bay-leaf candle to align you with abundance, prosperity and overflow. Burn during a new-moon.", "price_inr": 799, "badge": "Bestseller", "image_url": None, "accent": "from-[#EBB99A] to-[#F4C6D6]", "in_stock": True, "order": 1, "tags": ["money", "abundance"]},
+    {"id": "candle-love", "product_category_id": "candles", "name": "Love Candle", "blurb": "Rose-quartz + jasmine candle to draw in self-love, romance and harmonious relationships.", "price_inr": 799, "badge": "Most Loved", "image_url": None, "accent": "from-[#F4C6D6] to-[#FBE4D5]", "in_stock": True, "order": 2, "tags": ["love"]},
+    {"id": "candle-protection", "product_category_id": "candles", "name": "Protection Candle", "blurb": "Black tourmaline + sage candle to shield your aura, clear negative energy and protect your space.", "price_inr": 899, "badge": None, "image_url": None, "accent": "from-[#9B8AC4] to-[#6B5B95]", "in_stock": True, "order": 3, "tags": ["protection"]},
+    {"id": "candle-clarity", "product_category_id": "candles", "name": "Clarity Candle", "blurb": "Clear quartz + lavender candle to dissolve confusion and bring crystal-clear answers.", "price_inr": 799, "badge": "New", "image_url": None, "accent": "from-[#C8B6E2] to-[#E6DDF1]", "in_stock": True, "order": 4, "tags": ["clarity"]},
 
     # Crystals (variants)
-    {"id": "crystal-rosequartz", "product_category_id": "crystals", "name": "Rose Quartz Heart", "blurb": "Hand-cut rose quartz heart — the stone of unconditional love, healing and gentle self-acceptance.", "price_inr": 599, "badge": None, "image_url": None, "accent": "from-[#F4C6D6] to-[#FBE4D5]", "in_stock": True, "order": 1},
-    {"id": "crystal-amethyst", "product_category_id": "crystals", "name": "Amethyst Cluster", "blurb": "Raw amethyst cluster for intuition, deep sleep, spiritual protection and meditation.", "price_inr": 1199, "badge": "Most Loved", "image_url": None, "accent": "from-[#9B8AC4] to-[#C8B6E2]", "in_stock": True, "order": 2},
-    {"id": "crystal-citrine", "product_category_id": "crystals", "name": "Citrine Tumble", "blurb": "Polished citrine tumble — the merchant's stone for abundance, joy and creative flow.", "price_inr": 449, "badge": None, "image_url": None, "accent": "from-[#EBB99A] to-[#F4C6D6]", "in_stock": True, "order": 3},
-    {"id": "crystal-set", "product_category_id": "crystals", "name": "Starter Crystal Set", "blurb": "Curated set of 4 essential crystals — rose quartz, amethyst, citrine, clear quartz. Perfect for beginners.", "price_inr": 1499, "badge": "Bestseller", "image_url": None, "accent": "from-[#C8B6E2] to-[#E6DDF1]", "in_stock": True, "order": 4},
+    {"id": "crystal-rosequartz", "product_category_id": "crystals", "name": "Rose Quartz Heart", "blurb": "Hand-cut rose quartz heart — the stone of unconditional love, healing and gentle self-acceptance.", "price_inr": 599, "badge": None, "image_url": None, "accent": "from-[#F4C6D6] to-[#FBE4D5]", "in_stock": True, "order": 1, "tags": ["love"]},
+    {"id": "crystal-amethyst", "product_category_id": "crystals", "name": "Amethyst Cluster", "blurb": "Raw amethyst cluster for intuition, deep sleep, spiritual protection and meditation.", "price_inr": 1199, "badge": "Most Loved", "image_url": None, "accent": "from-[#9B8AC4] to-[#C8B6E2]", "in_stock": True, "order": 2, "tags": ["protection", "intuition"]},
+    {"id": "crystal-citrine", "product_category_id": "crystals", "name": "Citrine Tumble", "blurb": "Polished citrine tumble — the merchant's stone for abundance, joy and creative flow.", "price_inr": 449, "badge": None, "image_url": None, "accent": "from-[#EBB99A] to-[#F4C6D6]", "in_stock": True, "order": 3, "tags": ["money", "abundance"]},
+    {"id": "crystal-set", "product_category_id": "crystals", "name": "Starter Crystal Set", "blurb": "Curated set of 4 essential crystals — rose quartz, amethyst, citrine, clear quartz. Perfect for beginners.", "price_inr": 1499, "badge": "Bestseller", "image_url": None, "accent": "from-[#C8B6E2] to-[#E6DDF1]", "in_stock": True, "order": 4, "tags": ["love", "money", "protection", "clarity"]},
 
     # Oils (variants)
-    {"id": "oil-abundance", "product_category_id": "oils", "name": "Abundance Oil", "blurb": "Roll-on oil with citrine chips, basil, cinnamon — anoint candles, wallets, pulse points before manifestation.", "price_inr": 999, "badge": None, "image_url": None, "accent": "from-[#EBB99A] to-[#F4C6D6]", "in_stock": True, "order": 1},
-    {"id": "oil-love", "product_category_id": "oils", "name": "Love & Self-Love Oil", "blurb": "Rose, ylang-ylang and rose-quartz infused oil for opening the heart chakra.", "price_inr": 999, "badge": "New", "image_url": None, "accent": "from-[#F4C6D6] to-[#FBE4D5]", "in_stock": True, "order": 2},
-    {"id": "oil-clarity", "product_category_id": "oils", "name": "Clarity & Focus Oil", "blurb": "Peppermint, rosemary and clear quartz — anoint your temples before any reading or decision.", "price_inr": 899, "badge": None, "image_url": None, "accent": "from-[#C8B6E2] to-[#E6DDF1]", "in_stock": True, "order": 3},
+    {"id": "oil-abundance", "product_category_id": "oils", "name": "Abundance Oil", "blurb": "Roll-on oil with citrine chips, basil, cinnamon — anoint candles, wallets, pulse points before manifestation.", "price_inr": 999, "badge": None, "image_url": None, "accent": "from-[#EBB99A] to-[#F4C6D6]", "in_stock": True, "order": 1, "tags": ["money", "abundance"]},
+    {"id": "oil-love", "product_category_id": "oils", "name": "Love & Self-Love Oil", "blurb": "Rose, ylang-ylang and rose-quartz infused oil for opening the heart chakra.", "price_inr": 999, "badge": "New", "image_url": None, "accent": "from-[#F4C6D6] to-[#FBE4D5]", "in_stock": True, "order": 2, "tags": ["love"]},
+    {"id": "oil-clarity", "product_category_id": "oils", "name": "Clarity & Focus Oil", "blurb": "Peppermint, rosemary and clear quartz — anoint your temples before any reading or decision.", "price_inr": 899, "badge": None, "image_url": None, "accent": "from-[#C8B6E2] to-[#E6DDF1]", "in_stock": True, "order": 3, "tags": ["clarity"]},
 ]
 
 
 @app.on_event("startup")
 async def seed_db():
-    SEED_VERSION = "v8-product-categories"
+    SEED_VERSION = "v9-product-tags"
     meta = await db.app_meta.find_one({"_id": "seed"}, {"_id": 0}) or {}
     if meta.get("version") != SEED_VERSION:
         await db.services.delete_many({})
@@ -1290,6 +1290,7 @@ class ProductIn(BaseModel):
     in_stock: bool = True
     order: int = 100
     product_category_id: Optional[str] = None  # link to product_categories
+    tags: List[str] = []  # free-form labels e.g. ["money", "love"]
 
 
 class ProductImageUpload(BaseModel):
@@ -1299,16 +1300,42 @@ class ProductImageUpload(BaseModel):
 MAX_PRODUCT_IMAGES = 5
 
 
+def _slugify_tag(t: str) -> str:
+    """Normalize a tag to lowercase slug — letters/digits/hyphens only."""
+    if not t:
+        return ""
+    s = t.strip().lower()
+    out = []
+    for ch in s:
+        if ch.isalnum():
+            out.append(ch)
+        elif ch in (" ", "-", "_", "/"):
+            out.append("-")
+    slug = "".join(out)
+    while "--" in slug:
+        slug = slug.replace("--", "-")
+    return slug.strip("-")
+
+
 def _normalize_product_images(doc: dict) -> dict:
     """Mutates `doc` so that `images` is the source of truth (up to 5) and
     `image_url` always mirrors the primary (`images[0]`) for back-compat
-    with older shop frontends."""
+    with older shop frontends. Also normalises tags."""
     imgs = doc.get("images") or []
     if not imgs and doc.get("image_url"):
         imgs = [doc["image_url"]]
     imgs = [i for i in imgs if i][:MAX_PRODUCT_IMAGES]
     doc["images"] = imgs
     doc["image_url"] = imgs[0] if imgs else None
+    raw_tags = doc.get("tags") or []
+    seen_tags: set = set()
+    clean_tags: list = []
+    for t in raw_tags:
+        slug = _slugify_tag(str(t))
+        if slug and slug not in seen_tags:
+            seen_tags.add(slug)
+            clean_tags.append(slug)
+    doc["tags"] = clean_tags
     return doc
 
 
@@ -1384,6 +1411,23 @@ async def admin_delete_product_category(cid: str, _admin: str = Depends(verify_a
 async def public_list_products():
     docs = await db.products.find({}, {"_id": 0}).sort("order", 1).to_list(length=200)
     return [_normalize_product_images(d) for d in docs]
+
+
+@api_router.get("/tags")
+async def public_list_tags():
+    """Return distinct product tags with counts so the public shop can render
+    filter chips (e.g. money, love, protection)."""
+    docs = await db.products.find({}, {"_id": 0, "tags": 1}).to_list(length=500)
+    counts: dict[str, int] = {}
+    for d in docs:
+        for t in d.get("tags") or []:
+            slug = _slugify_tag(str(t))
+            if slug:
+                counts[slug] = counts.get(slug, 0) + 1
+    return [
+        {"slug": slug, "count": cnt}
+        for slug, cnt in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))
+    ]
 
 
 @api_router.get("/admin/products")
