@@ -28,6 +28,7 @@ import {
   Stars,
 } from "lucide-react";
 import { BRAND } from "../lib/brand";
+import AvailableOffers from "./AvailableOffers";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const RAZORPAY_KEY_ID =
@@ -230,12 +231,14 @@ export default function BookingDialog({
     if (step > 0) setStep(step - 1);
   };
 
-  const applyCoupon = async () => {
-    if (!couponCode.trim() || !selectedService) return;
+  const applyCoupon = async (codeArg) => {
+    const code = (codeArg || couponCode || "").trim().toUpperCase();
+    if (!code || !selectedService) return;
+    setCouponCode(code);
     setCouponLoading(true);
     try {
       const res = await axios.post(`${API}/promotions/validate`, {
-        code: couponCode.trim().toUpperCase(),
+        code,
         kind: "services",
         base_inr: selectedService.price_inr,
         target_id: selectedService.id,
@@ -684,6 +687,14 @@ export default function BookingDialog({
               </div>
 
               {!couponInfo && (
+                <AvailableOffers
+                  kind="services"
+                  appliedCode={couponInfo ? couponCode : null}
+                  onApply={(code) => applyCoupon(code)}
+                />
+              )}
+
+              {!couponInfo && (
                 <div className="rounded-2xl bg-white border-2 border-dashed border-[#EBB99A]/50 px-5 py-4">
                   <div className="text-[10px] uppercase tracking-[0.32em] text-[#D9A382] font-bold flex items-center gap-2">
                     <Sparkles size={12} className="text-[#EBB99A]" /> Have a coupon?
@@ -700,7 +711,7 @@ export default function BookingDialog({
                       type="button"
                       data-testid="booking-coupon-apply"
                       disabled={!couponCode.trim() || couponLoading}
-                      onClick={applyCoupon}
+                      onClick={() => applyCoupon()}
                       className="inline-flex items-center gap-1 bg-lavender-deep text-ivory rounded-xl px-4 py-2 text-sm font-medium hover:bg-lavender-deeper disabled:opacity-50"
                     >
                       {couponLoading ? <Loader2 className="animate-spin" size={14} /> : null}

@@ -1,0 +1,41 @@
+{
+  "summary": "Iteration-4 verified the Available Offers UX in BookingDialog + ShopCheckoutDialog and all listed regressions. Booking flow: opened via hero-book-now → picked tarot_numerology_call category → tn-15-call (₹2,100) → date 2026-04-27 → first slot → details filled → reached step-pay. data-testid='available-offers' rendered and contained offer-LAUNCH40 with both offer-copy-LAUNCH40 and offer-apply-LAUNCH40. Tap-to-apply dispatched POST /api/promotions/validate, fired toast 'Coupon applied — saved ₹840 ✦', updated summary to show 'Coupon LAUNCH40 applied  − ₹840' + 'Final amount ₹1,260', and Pay CTA changed to 'Pay ₹1,260 ✦'. Math is correct: 40% of 2100 = 840 saved, final 1260 (the spec line '₹2100 → ₹840' appears to confuse 'saved' with 'final'). Shop flow: opened via shop-buy-candle-money on home → cart → address (filled) → step-pay. As expected (LAUNCH40 scope=services_only) data-testid='available-offers' did NOT render, no crash, no error elements, and the legacy shop-coupon-input remained available. Banner regression: SpecialOfferBanner has position:fixed top:0 h=48px, --banner-h CSS var = 48px on load and header.y=48; clicking the banner dismiss button flipped --banner-h to 0px and header.y back to 0. Admin regression: logged in as jenika/guidance@2026, tab-product-categories visible & clickable (ProductCategoriesPanel renders with 'Categor' content), Add Product modal exposes a Shop category select with data-testid='product-input-category' populated from shopCategories. Backend GET /api/promotions/active confirmed via curl returns the LAUNCH40 record with discount_type='percent', discount_value=40, scope='services_only', show_banner=true, banner_text='40% off on all services '.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin → Shop → Add Product modal", "issues": ["React hydration warning in console: '<span> cannot be a child of <option>'. Source: ProductsPanel.jsx around line 439 — the Shop category native <select> renders <option><span>{c.name}</span></option>. Browsers strip the span at render time so it works visually, but it pollutes the console and is invalid HTML. Render the plain text inside <option>, e.g. <option key={c.id} value={c.id}>{c.name}</option>."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3_status_and_whatsapp.py",
+    "/app/backend/tests/test_backend_api.py"
+  ],
+  "action_items": [
+    "(Doc nit) Spec line '₹2100 → ₹840 for 15-min reading' is ambiguous: 40% off ₹2,100 = ₹840 SAVED, final payable = ₹1,260. UI correctly shows both '− ₹840' (discount) and 'Final amount ₹1,260'. Update spec wording.",
+    "(Minor) Fix hydration warning in /app/frontend/src/components/admin/ProductsPanel.jsx line ~439 — replace the inner <span>{c.name}</span> with raw text inside <option>."
+  ],
+  "critical_code_review_comments": [
+    "AvailableOffers.jsx — clean, correct scope filtering (site_wide / services_only / products_only) and returns null when promos.length===0 so the shop pay step gracefully shows nothing for services-only promos. Good.",
+    "BookingDialog.jsx — applyCoupon(codeArg) now optionally accepts a code, and uses it before falling back to the manual input. The block hides correctly once couponInfo is set (both AvailableOffers and the 'Have a coupon?' input are conditionally rendered behind !couponInfo, with a 'Remove coupon' link to revert). UX is clean.",
+    "ShopCheckoutDialog.jsx — same pattern; kind='products' passed correctly so LAUNCH40 (services_only) is filtered out client-side. No backend fetch on /promotions/validate is initiated until user types a code, so wasted requests are avoided.",
+    "SpecialOfferBanner.jsx + Header.jsx + HomePage.jsx — coordinated via --banner-h CSS var; verified live: banner fixed top:0, header style.top reads var(--banner-h, 0px), dismiss flips var to 0px and header slides up. Smooth transition.",
+    "AdminDashboard ProductCategoriesPanel — tab present, CRUD panel renders, integration with Add Product 'Shop category' dropdown confirmed working.",
+    "ProductsPanel.jsx renders <span> inside <option> (line ~439) which trips a React hydration warning in dev. Visual works but console warning should be fixed."
+  ],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "100% (curl GET /api/promotions/active matches spec)",
+    "frontend": "100% on all 8 listed test scenarios"
+  },
+  "test_credentials": "Admin jenika / guidance@2026 verified working. Razorpay still in mock placeholder mode (intentional).",
+  "seed_data_creation": "No DB writes — booking flow stopped at step-pay (did not click Pay), shop flow stopped at step-pay (did not click Pay), admin only opened/closed Add Product modal without saving.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Available Offers feature is fully working end-to-end. Key testids: data-testid='available-offers' (wrapper), data-testid='offer-LAUNCH40' (block), data-testid='offer-copy-LAUNCH40', data-testid='offer-apply-LAUNCH40'. Tap-to-apply auto-fills couponCode + dispatches POST /api/promotions/validate; success toast format: 'Coupon applied — saved ₹{X} ✦'. Once applied the AvailableOffers block AND 'Have a coupon?' input both unmount (couponInfo gate) and a 'Remove coupon' link appears. To re-test, use service tn-15-call (₹2,100, services_only fits LAUNCH40 scope). Shop is at /#shop on HomePage (no /shop route); product Buy Now testid is shop-buy-{product_id} (e.g. shop-buy-candle-money). Banner regression: --banner-h CSS var toggles between '48px' (visible) and '0px' (dismissed); header uses style.top=var(--banner-h,0px). One non-blocking React warning to fix: <span> inside <option> in ProductsPanel.jsx line ~439.",
+  "rca of the issue": "N/A — no defects found in iteration 4. All 8 spec scenarios pass."
+}
