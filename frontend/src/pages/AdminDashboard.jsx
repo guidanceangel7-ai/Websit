@@ -1,8 +1,22 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { format } from "date-fns";
 import { BRAND } from "../lib/brand";
-import { LogOut, RefreshCw, Phone, Mail, MessageCircle, Plus, X, CalendarOff } from "lucide-react";
+import {
+  LogOut,
+  RefreshCw,
+  Phone,
+  Mail,
+  MessageCircle,
+  Plus,
+  X,
+  CalendarOff,
+  CalendarIcon,
+  Filter,
+  Check,
+  ChevronDown,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -14,25 +28,51 @@ import {
 import { Badge } from "../components/ui/badge";
 import { Toaster } from "../components/ui/sonner";
 import { toast } from "sonner";
+import { Calendar } from "../components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../components/ui/dropdown-menu";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const statusColor = (s) =>
+const PAY_COLOR = (s) =>
   ({
     paid: "bg-lavender-deep text-ivory",
     pending: "bg-peach/30 text-ink-plum",
     failed: "bg-red-100 text-red-700",
-    confirmed: "bg-lavender-deep text-ivory",
   })[s] || "bg-ivory-deep text-ink-plum";
+
+const STATUS_COLOR = (s) =>
+  ({
+    confirmed: "bg-lavender-deep/90 text-ivory",
+    completed: "bg-emerald-100 text-emerald-800",
+    cancelled: "bg-red-100 text-red-700",
+    no_show: "bg-orange-100 text-orange-700",
+    pending: "bg-peach/30 text-ink-plum",
+  })[s] || "bg-ivory-deep text-ink-plum";
+
+const STATUS_OPTIONS = [
+  { value: "pending", label: "Pending" },
+  { value: "confirmed", label: "Confirmed" },
+  { value: "completed", label: "Completed" },
+  { value: "cancelled", label: "Cancelled" },
+  { value: "no_show", label: "No-show" },
+];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [bookings, setBookings] = useState([]);
   const [blockedDates, setBlockedDates] = useState([]);
-  const [newBlockDate, setNewBlockDate] = useState("");
+  const [newBlockDate, setNewBlockDate] = useState(null); // Date object
   const [newBlockReason, setNewBlockReason] = useState("");
   const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState("all"); // all | paid | pending | failed
+  const [statusFilter, setStatusFilter] = useState("all"); // all | confirmed | completed | cancelled | no_show | pending
 
   const token =
     typeof window !== "undefined" ? localStorage.getItem("ga_admin_token") : null;
@@ -72,13 +112,14 @@ export default function AdminDashboard() {
     e.preventDefault();
     if (!newBlockDate) return;
     try {
+      const dateStr = format(newBlockDate, "yyyy-MM-dd");
       await axios.post(
         `${API}/admin/blocked-dates`,
-        { date: newBlockDate, reason: newBlockReason || "Unavailable" },
+        { date: dateStr, reason: newBlockReason || "Unavailable" },
         { headers }
       );
       toast.success("Date blocked ✦");
-      setNewBlockDate("");
+      setNewBlockDate(null);
       setNewBlockReason("");
       refresh();
     } catch {
@@ -95,6 +136,29 @@ export default function AdminDashboard() {
       toast.error("Could not remove");
     }
   };
+
+  const updateBookingStatus = async (booking_id, booking_status) => {
+    try {
+      await axios.patch(
+        `${API}/admin/bookings/${booking_id}`,
+        { booking_status },
+        { headers }
+      );
+      toast.success(`Marked ${booking_status.replace("_", " ")} ✦`);
+      refresh();
+    } catch {
+      toast.error("Could not update");
+    }
+  };
+
+  const filtered = useMemo(() => {
+    return bookings.filter((b) => {
+      if (filter !== "all" && b.payment_status !== filter) return false;
+      if (statusFilter !== "all" && b.booking_status !== statusFilter)
+        return false;
+      return true;
+    });
+  }, [bookings, filter, statusFilter]);
 
   const logout = () => {
     localStorage.removeItem("ga_admin_token");
@@ -196,14 +260,32 @@ export default function AdminDashboard() {
               <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep">
                 Date
               </label>
-              <input
-                type="date"
-                data-testid="blocked-date-input"
-                value={newBlockDate}
-                onChange={(e) => setNewBlockDate(e.target.value)}
-                className="mt-1.5 rounded-xl border border-peach/30 bg-white px-3 py-2 outline-none focus:border-lavender-deep focus:ring-2 focus:ring-peach/40"
-                required
-              />
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    data-testid="blocked-date-input"
+                    className="mt-1.5 inline-flex items-center gap-2 rounded-xl border border-peach/30 bg-white px-3 py-2 text-sm hover:border-lavender-deep min-w-[180px] justify-between"
+                  >
+                    <span className={newBlockDate ? "text-ink-plum" : "text-ink-plum/50"}>
+                      {newBlockDate ? format(newBlockDate, "EEE, dd MMM yyyy") : "Pick a date"}
+                    </span>
+                    <CalendarIcon size={14} className="text-lavender-deep" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0 bg-white border-peach/30 rounded-2xl" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={newBlockDate}
+                    onSelect={setNewBlockDate}
+                    disabled={(d) => {
+                      const today = new Date();
+                      today.setHours(0, 0, 0, 0);
+                      return d < today;
+                    }}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
             <div className="flex-1 min-w-[200px]">
               <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep">
@@ -220,7 +302,8 @@ export default function AdminDashboard() {
             <button
               type="submit"
               data-testid="blocked-add-btn"
-              className="inline-flex items-center gap-1.5 bg-lavender-deep text-ivory rounded-full px-5 py-2.5 text-sm hover:bg-lavender-deeper"
+              disabled={!newBlockDate}
+              className="inline-flex items-center gap-1.5 bg-lavender-deep text-ivory rounded-full px-5 py-2.5 text-sm hover:bg-lavender-deeper disabled:opacity-50"
             >
               <Plus size={14} /> Block
             </button>
@@ -255,6 +338,53 @@ export default function AdminDashboard() {
         </div>
 
         <div className="mt-10 rounded-3xl bg-white/85 border border-peach/30 overflow-hidden">
+          {/* Filters */}
+          <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-peach/20 bg-ivory-deep/30">
+            <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-peach-deep">
+              <Filter size={12} /> Filter
+            </div>
+            <div className="inline-flex items-center gap-1 bg-white rounded-full border border-peach/30 p-1">
+              {[
+                ["all", "All"],
+                ["paid", "Paid"],
+                ["pending", "Pending"],
+                ["failed", "Failed"],
+              ].map(([k, lbl]) => (
+                <button
+                  key={k}
+                  data-testid={`filter-pay-${k}`}
+                  onClick={() => setFilter(k)}
+                  className={`px-3 py-1 text-xs rounded-full transition ${
+                    filter === k
+                      ? "bg-lavender-deep text-ivory"
+                      : "text-ink-plum/70 hover:bg-peach/15"
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            <div className="inline-flex items-center gap-1 bg-white rounded-full border border-peach/30 p-1">
+              {[["all", "All"]].concat(STATUS_OPTIONS.map((o) => [o.value, o.label])).map(([k, lbl]) => (
+                <button
+                  key={k}
+                  data-testid={`filter-status-${k}`}
+                  onClick={() => setStatusFilter(k)}
+                  className={`px-3 py-1 text-xs rounded-full transition ${
+                    statusFilter === k
+                      ? "bg-lavender-deep text-ivory"
+                      : "text-ink-plum/70 hover:bg-peach/15"
+                  }`}
+                >
+                  {lbl}
+                </button>
+              ))}
+            </div>
+            <div className="ml-auto text-xs text-ink-plum/60">
+              {filtered.length} of {bookings.length} bookings
+            </div>
+          </div>
+
           <Table data-testid="admin-bookings-table">
             <TableHeader className="bg-ivory-deep/50">
               <TableRow>
@@ -262,19 +392,22 @@ export default function AdminDashboard() {
                 <TableHead>Service</TableHead>
                 <TableHead>Date / Slot</TableHead>
                 <TableHead>Amount</TableHead>
+                <TableHead>Payment</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Reach</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {bookings.length === 0 && (
+              {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-8 text-ink-plum/60">
-                    No bookings yet. The first soul is on the way.
+                  <TableCell colSpan={7} className="text-center py-8 text-ink-plum/60">
+                    {bookings.length === 0
+                      ? "No bookings yet. The first soul is on the way."
+                      : "No bookings match these filters."}
                   </TableCell>
                 </TableRow>
               )}
-              {bookings.map((b) => (
+              {filtered.map((b) => (
                 <TableRow key={b.id} data-testid={`row-${b.id}`}>
                   <TableCell>
                     <div className="font-medium text-ink-plum">
@@ -311,10 +444,40 @@ export default function AdminDashboard() {
                     ₹{b.service_price_inr?.toLocaleString("en-IN")}
                   </TableCell>
                   <TableCell>
-                    <Badge className={statusColor(b.payment_status)}>
+                    <Badge className={PAY_COLOR(b.payment_status)}>
                       {b.payment_status}
                       {b.is_mock_payment ? " · mock" : ""}
                     </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          data-testid={`status-dropdown-${b.id}`}
+                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${STATUS_COLOR(b.booking_status)}`}
+                        >
+                          {(b.booking_status || "pending").replace("_", " ")}
+                          <ChevronDown size={12} />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start" className="bg-white border-peach/30">
+                        {STATUS_OPTIONS.map((opt) => (
+                          <DropdownMenuItem
+                            key={opt.value}
+                            data-testid={`status-set-${opt.value}-${b.id}`}
+                            onClick={() => updateBookingStatus(b.id, opt.value)}
+                            className="cursor-pointer"
+                          >
+                            {b.booking_status === opt.value ? (
+                              <Check size={14} className="mr-2 text-lavender-deep" />
+                            ) : (
+                              <span className="w-[14px] mr-2" />
+                            )}
+                            {opt.label}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-2">

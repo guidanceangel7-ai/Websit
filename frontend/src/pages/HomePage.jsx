@@ -2,10 +2,14 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import Header from "../components/Header";
 import Hero from "../components/Hero";
+import HeroMarquee from "../components/HeroMarquee";
+import PressStrip from "../components/PressStrip";
 import About from "../components/About";
 import Gallery from "../components/Gallery";
+import HowItWorks from "../components/HowItWorks";
 import Services from "../components/Services";
 import Testimonials from "../components/Testimonials";
+import InstagramGrid from "../components/InstagramGrid";
 import FAQ from "../components/FAQ";
 import Contact from "../components/Contact";
 import Footer from "../components/Footer";
@@ -51,13 +55,17 @@ export default function HomePage() {
       <Header onBookNow={() => openBooking(null)} />
       <main>
         <Hero onBookNow={() => openBooking(null)} />
+        <HeroMarquee />
+        <PressStrip />
         <About />
         <Gallery />
+        <HowItWorks onBookNow={() => openBooking(null)} />
         <Services
           services={services}
           onSelect={(s) => openBooking(s)}
         />
         <Testimonials items={testimonials} />
+        <InstagramGrid />
         <FAQ />
         <Contact onBookNow={() => openBooking(null)} />
       </main>

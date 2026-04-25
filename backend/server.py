@@ -14,6 +14,7 @@ import hashlib
 import jwt
 import razorpay
 from email_service import send_booking_confirmation
+from whatsapp_service import send_booking_whatsapp
 
 
 ROOT_DIR = Path(__file__).parent
@@ -345,7 +346,7 @@ async def verify_payment(payload: VerifyPayment):
         }}
     )
     updated = await db.bookings.find_one({"id": payload.booking_id}, {"_id": 0})
-    # Fire-and-forget email confirmation (won't block / fail the response)
+    # Fire-and-forget email + WhatsApp confirmation (won't block / fail the response)
     try:
         email_id = await send_booking_confirmation(updated)
         if email_id:
@@ -355,6 +356,15 @@ async def verify_payment(payload: VerifyPayment):
             )
     except Exception as e:
         logger.warning(f"Email send failed (non-blocking): {e}")
+    try:
+        wa_id = await send_booking_whatsapp(updated)
+        if wa_id:
+            await db.bookings.update_one(
+                {"id": payload.booking_id},
+                {"$set": {"confirmation_whatsapp_id": wa_id}}
+            )
+    except Exception as e:
+        logger.warning(f"WhatsApp send failed (non-blocking): {e}")
     return {"success": True, "booking": updated, "is_mock": is_mock}
 
 
@@ -370,6 +380,28 @@ async def admin_login(payload: AdminLogin):
 async def admin_list_bookings(_admin: str = Depends(verify_admin)):
     docs = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).to_list(length=500)
     return docs
+
+
+class BookingStatusUpdate(BaseModel):
+    booking_status: str  # pending | confirmed | completed | cancelled | no_show
+
+
+@api_router.patch("/admin/bookings/{booking_id}")
+async def admin_update_booking(
+    booking_id: str,
+    payload: BookingStatusUpdate,
+    _admin: str = Depends(verify_admin),
+):
+    allowed = {"pending", "confirmed", "completed", "cancelled", "no_show"}
+    if payload.booking_status not in allowed:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Allowed: {allowed}")
+    res = await db.bookings.update_one(
+        {"id": booking_id},
+        {"$set": {"booking_status": payload.booking_status}}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    return {"success": True, "booking_status": payload.booking_status}
 
 
 @api_router.get("/admin/stats")

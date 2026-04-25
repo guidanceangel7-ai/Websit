@@ -24,7 +24,7 @@ const CATEGORIES = {
   },
 };
 
-function ServiceCard({ service, onSelect }) {
+function ServiceCard({ service, onSelect, badge, savings }) {
   return (
     <motion.button
       type="button"
@@ -34,6 +34,11 @@ function ServiceCard({ service, onSelect }) {
       transition={{ duration: 0.25 }}
       className="group text-left relative w-full rounded-3xl bg-white/85 backdrop-blur border border-peach/25 p-6 sm:p-7 shadow-soft hover:shadow-[0_20px_50px_-15px_rgba(107,91,149,0.25)] focus:outline-none"
     >
+      {badge && (
+        <div className="absolute -top-3 left-6 inline-flex items-center gap-1.5 bg-lavender-deep text-ivory text-[10px] tracking-[0.22em] uppercase px-3 py-1.5 rounded-full shadow-[0_6px_18px_rgba(107,91,149,0.35)]">
+          <Star size={10} color="#EBB99A" /> {badge}
+        </div>
+      )}
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-center gap-2 text-peach-deep text-xs tracking-[0.22em] uppercase">
           {service.is_voice_note ? (
@@ -66,6 +71,11 @@ function ServiceCard({ service, onSelect }) {
           <div className="font-display text-3xl text-lavender-deep mt-1">
             ₹{service.price_inr.toLocaleString("en-IN")}
           </div>
+          {savings && (
+            <div className="mt-1 inline-block text-[10px] tracking-[0.2em] uppercase font-semibold text-peach-deep bg-peach/15 px-2 py-0.5 rounded-full">
+              Save {savings}
+            </div>
+          )}
         </div>
         <span className="inline-flex items-center gap-1.5 text-sm text-lavender-deep font-medium opacity-90 group-hover:translate-x-1 transition">
           Book now <ArrowRight size={16} />
@@ -123,13 +133,29 @@ export default function Services({ services, onSelect }) {
                 />
               </div>
               <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {list.map((service) => (
-                  <ServiceCard
-                    key={service.id}
-                    service={service}
-                    onSelect={onSelect}
-                  />
-                ))}
+                {list.map((service, i) => {
+                  // First card in tarot_numerology + akashic = "Most loved"
+                  // 45-min / 60-min cards get a savings badge
+                  let badge = null;
+                  let savings = null;
+                  if (key === "tarot_numerology" && service.duration_minutes === 30) {
+                    badge = "Most Loved";
+                  }
+                  if (key === "akashic" && service.duration_minutes === 60) {
+                    badge = "Deepest Journey";
+                  }
+                  if (service.duration_minutes === 45) savings = "₹500";
+                  if (service.duration_minutes === 60) savings = "₹500";
+                  return (
+                    <ServiceCard
+                      key={service.id}
+                      service={service}
+                      onSelect={onSelect}
+                      badge={badge}
+                      savings={savings}
+                    />
+                  );
+                })}
               </div>
             </div>
           )
