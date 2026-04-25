@@ -19,6 +19,7 @@ import {
   ArrowRight,
   Check,
   Clock,
+  Headphones,
   Loader2,
   Sparkles,
 } from "lucide-react";
@@ -37,19 +38,19 @@ function Stepper({ current, steps }) {
       {steps.map((s, i) => (
         <React.Fragment key={s}>
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold transition ${
+            className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition ${
               i < current
-                ? "bg-lavender-deep text-ivory"
+                ? "bg-[#EBB99A] text-[#3A2E5D] shadow-[0_4px_14px_rgba(235,185,154,0.5)]"
                 : i === current
-                  ? "bg-peach text-ink-plum ring-4 ring-peach/30"
-                  : "bg-ivory-deep text-ink-plum/50"
+                  ? "bg-white text-[#6B5B95] ring-4 ring-white/40 shadow-[0_4px_14px_rgba(255,255,255,0.4)]"
+                  : "bg-white/20 text-white/70 border border-white/30"
             }`}
           >
-            {i < current ? <Check size={14} /> : i + 1}
+            {i < current ? <Check size={14} strokeWidth={3} /> : i + 1}
           </div>
           {i < steps.length - 1 && (
             <div
-              className={`h-px w-8 sm:w-12 ${i < current ? "bg-lavender-deep" : "bg-peach/40"}`}
+              className={`h-0.5 w-8 sm:w-12 ${i < current ? "bg-[#EBB99A]" : "bg-white/30"}`}
             />
           )}
         </React.Fragment>
@@ -281,25 +282,33 @@ export default function BookingDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         data-testid="booking-dialog"
-        className="max-w-2xl !bg-[#FFFFFF] border-2 border-peach/40 rounded-3xl p-0 overflow-hidden shadow-[0_30px_80px_-20px_rgba(58,46,93,0.6)]"
+        className="max-w-2xl !bg-[#FFFFFF] border-0 rounded-3xl p-0 overflow-hidden shadow-[0_30px_80px_-20px_rgba(58,46,93,0.6)]"
       >
-        <div className="bg-gradient-to-br from-[#E6DDF1] via-[#F4C6D6] to-[#FBE4D5] px-6 sm:px-8 py-6 border-b border-peach/30">
-          <DialogHeader>
-            <DialogTitle className="font-display text-2xl text-ink-plum text-center">
+        {/* Rich lavender header with peach accent */}
+        <div className="relative bg-gradient-to-br from-[#6B5B95] via-[#9B8AC4] to-[#6B5B95] px-6 sm:px-8 pt-7 pb-6">
+          {/* Decorative peach blur */}
+          <div className="absolute -top-12 -right-8 w-44 h-44 rounded-full bg-[#EBB99A]/40 blur-3xl pointer-events-none" />
+          <div className="absolute -bottom-16 -left-10 w-44 h-44 rounded-full bg-[#F4C6D6]/40 blur-3xl pointer-events-none" />
+
+          <DialogHeader className="relative">
+            <div className="text-center text-[10px] tracking-[0.32em] uppercase text-[#EBB99A] font-semibold mb-2">
+              ✦ Begin Your Journey ✦
+            </div>
+            <DialogTitle className="font-display text-2xl sm:text-3xl text-white text-center drop-shadow-[0_2px_8px_rgba(0,0,0,0.25)]">
               {stepLabel}
             </DialogTitle>
-            <DialogDescription className="text-center text-ink-plum/70 text-sm">
+            <DialogDescription className="text-center text-white/85 text-sm">
               {selectedService
                 ? `${selectedService.name} · ₹${selectedService.price_inr.toLocaleString("en-IN")}`
-                : "Begin your guidance journey"}
+                : "Sacred guidance, one breath at a time"}
             </DialogDescription>
           </DialogHeader>
-          <div className="mt-4">
+          <div className="mt-5 relative">
             <Stepper current={step} steps={STEPS} />
           </div>
         </div>
 
-        <div className="px-6 sm:px-8 py-6 max-h-[60vh] overflow-y-auto bg-[#FFFFFF]">
+        <div className="px-6 sm:px-8 py-7 max-h-[60vh] overflow-y-auto bg-[#FFFFFF]">
           {cur === "service" && (
             <div data-testid="step-service" className="grid gap-3">
               {services?.map((s) => (
@@ -310,20 +319,28 @@ export default function BookingDialog({
                     setSelectedService(s);
                     setStep(1);
                   }}
-                  className="text-left rounded-2xl border-2 border-peach/40 bg-[#FBF4E8] px-5 py-4 hover:border-lavender-deep hover:bg-white hover:shadow-soft transition flex items-center justify-between gap-4"
+                  className="group text-left rounded-2xl border-2 border-[#EBB99A]/30 bg-gradient-to-r from-[#FBF4E8] to-white px-5 py-4 hover:border-[#6B5B95] hover:shadow-[0_8px_24px_-8px_rgba(107,91,149,0.3)] hover:-translate-y-0.5 transition flex items-center justify-between gap-4"
                 >
-                  <div>
-                    <div className="text-[11px] uppercase tracking-[0.22em] text-peach-deep font-semibold">
-                      {s.is_voice_note
-                        ? "Voice Note"
-                        : `${s.duration_minutes} min`}
+                  <div className="flex items-center gap-4">
+                    <div className="w-11 h-11 rounded-full bg-gradient-to-br from-[#C8B6E2] to-[#EBB99A] flex items-center justify-center text-white shadow-[0_4px_12px_rgba(155,138,196,0.3)]">
+                      {s.is_voice_note ? <Headphones size={18} /> : <Clock size={18} />}
                     </div>
-                    <div className="font-display text-base text-ink-plum mt-1">
-                      {s.name}
+                    <div>
+                      <div className="text-[10px] uppercase tracking-[0.22em] text-[#D9A382] font-bold">
+                        {s.is_voice_note ? "Voice Note" : `${s.duration_minutes} min`}
+                      </div>
+                      <div className="font-display text-base text-[#3A2E5D] mt-0.5">
+                        {s.name}
+                      </div>
                     </div>
                   </div>
-                  <div className="font-display text-lavender-deep text-xl">
-                    ₹{s.price_inr.toLocaleString("en-IN")}
+                  <div className="text-right">
+                    <div className="font-display text-[#6B5B95] text-2xl">
+                      ₹{s.price_inr.toLocaleString("en-IN")}
+                    </div>
+                    <div className="text-[10px] tracking-wider text-[#9B8AC4] uppercase opacity-0 group-hover:opacity-100 transition">
+                      Select →
+                    </div>
                   </div>
                 </button>
               ))}
@@ -380,8 +397,8 @@ export default function BookingDialog({
                       onClick={() => setSlot(s)}
                       className={`rounded-full px-3 py-2.5 text-sm border-2 transition font-medium ${
                         slot === s
-                          ? "bg-lavender-deep text-ivory border-lavender-deep shadow-[0_4px_14px_rgba(107,91,149,0.4)]"
-                          : "bg-[#FBF4E8] border-peach/40 text-ink-plum hover:border-lavender-deep hover:bg-white"
+                          ? "bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] text-white border-[#6B5B95] shadow-[0_4px_14px_rgba(107,91,149,0.45)]"
+                          : "bg-white border-[#EBB99A]/40 text-[#3A2E5D] hover:border-[#6B5B95] hover:bg-[#FBF4E8]"
                       }`}
                     >
                       <Clock size={12} className="inline mr-1.5 -mt-0.5" /> {s}
@@ -506,64 +523,65 @@ export default function BookingDialog({
 
           {cur === "pay" && (
             <div data-testid="step-pay" className="space-y-5">
-              <div className="rounded-2xl bg-[#FBF4E8] border-2 border-peach/40 p-5">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-peach-deep font-semibold">
-                  ✦ Booking Summary
+              <div className="rounded-2xl bg-gradient-to-br from-[#FBF4E8] via-white to-[#F4C6D6]/15 border-2 border-[#EBB99A]/40 p-6 shadow-[0_4px_18px_-4px_rgba(107,91,149,0.15)]">
+                <div className="text-[11px] uppercase tracking-[0.32em] text-[#D9A382] font-bold flex items-center gap-2">
+                  <Sparkles size={14} className="text-[#EBB99A]" /> Booking Summary
                 </div>
-                <div className="mt-3 grid sm:grid-cols-2 gap-3 text-sm">
-                  <div>
-                    <div className="text-ink-plum/60 text-xs uppercase tracking-wider">Service</div>
-                    <div className="font-display text-lg text-ink-plum mt-0.5">
+                <div className="mt-4 grid sm:grid-cols-2 gap-4 text-sm">
+                  <div className="bg-white/60 rounded-xl px-4 py-3 border border-[#EBB99A]/20">
+                    <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">Service</div>
+                    <div className="font-display text-lg text-[#3A2E5D] mt-1">
                       {selectedService?.name}
                     </div>
                   </div>
                   {!isVoiceNote && date && slot && (
-                    <div>
-                      <div className="text-ink-plum/60 text-xs uppercase tracking-wider">Date & time</div>
-                      <div className="font-display text-lg text-ink-plum mt-0.5">
+                    <div className="bg-white/60 rounded-xl px-4 py-3 border border-[#EBB99A]/20">
+                      <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">Date & time</div>
+                      <div className="font-display text-lg text-[#3A2E5D] mt-1">
                         {format(date, "EEE, dd MMM yyyy")} · {slot}
                       </div>
                     </div>
                   )}
-                  <div>
-                    <div className="text-ink-plum/60 text-xs uppercase tracking-wider">For</div>
-                    <div className="text-ink-plum mt-0.5">
-                      {form.customer_name} ({form.customer_email})
+                  <div className="bg-white/60 rounded-xl px-4 py-3 border border-[#EBB99A]/20">
+                    <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">For</div>
+                    <div className="text-[#3A2E5D] mt-1">
+                      {form.customer_name}
                     </div>
+                    <div className="text-[#3A2E5D]/70 text-xs">{form.customer_email}</div>
                   </div>
-                  <div>
-                    <div className="text-ink-plum/60 text-xs uppercase tracking-wider">WhatsApp</div>
-                    <div className="text-ink-plum mt-0.5">{form.customer_phone}</div>
+                  <div className="bg-white/60 rounded-xl px-4 py-3 border border-[#EBB99A]/20">
+                    <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">WhatsApp</div>
+                    <div className="text-[#3A2E5D] mt-1">{form.customer_phone}</div>
                   </div>
                 </div>
 
-                <div className="mt-5 pt-4 border-t-2 border-peach/30 flex items-center justify-between">
-                  <div className="text-sm text-ink-plum/70 uppercase tracking-wider font-semibold">Total payable</div>
-                  <div className="font-display text-3xl text-lavender-deep">
+                <div className="mt-6 pt-5 border-t-2 border-dashed border-[#EBB99A]/40 flex items-center justify-between">
+                  <div className="text-sm text-[#6B5B95] uppercase tracking-[0.2em] font-bold">Total payable</div>
+                  <div className="font-display text-3xl bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] bg-clip-text text-transparent">
                     ₹{selectedService?.price_inr?.toLocaleString("en-IN")}
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl bg-peach/15 border border-peach/40 px-5 py-4 text-sm text-ink-plum/80 flex items-start gap-3">
-                <Sparkles size={16} className="text-peach-deep mt-0.5" />
-                <div>
-                  Secure payment powered by Razorpay (UPI, cards, netbanking,
-                  wallets). You'll receive a WhatsApp confirmation immediately
-                  after payment.
+              <div className="rounded-2xl bg-gradient-to-r from-[#EBB99A]/15 to-[#F4C6D6]/15 border-2 border-[#EBB99A]/30 px-5 py-4 text-sm text-[#3A2E5D]/85 flex items-start gap-3">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#EBB99A] to-[#F4C6D6] flex items-center justify-center text-white shrink-0">
+                  <Sparkles size={16} />
+                </div>
+                <div className="leading-relaxed">
+                  Secure payment powered by <span className="font-semibold text-[#6B5B95]">Razorpay</span> — UPI, cards, netbanking, wallets. You'll receive WhatsApp + email confirmation immediately after payment.
                 </div>
               </div>
             </div>
           )}
         </div>
 
-        <div className="border-t border-peach/30 bg-[#FBF4E8] px-6 sm:px-8 py-4 flex items-center justify-between gap-3">
+        <div className="border-t-2 border-[#EBB99A]/30 bg-gradient-to-r from-[#FBF4E8] to-[#F5EAD6] px-6 sm:px-8 py-4 flex items-center justify-between gap-3">
           <Button
             variant="ghost"
             data-testid="booking-back"
             onClick={goBack}
             disabled={step === 0}
-            className="text-ink-plum/70 hover:text-lavender-deep"
+            className="text-[#6B5B95] hover:bg-[#EBB99A]/15 hover:text-[#5A4C7E] disabled:opacity-40 rounded-full"
           >
             <ArrowLeft size={16} className="mr-1" /> Back
           </Button>
@@ -573,19 +591,19 @@ export default function BookingDialog({
               data-testid="booking-pay"
               disabled={submitting}
               onClick={handlePay}
-              className="bg-lavender-deep hover:bg-lavender-deeper text-ivory rounded-full px-7"
+              className="bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] hover:from-[#5A4C7E] hover:to-[#6B5B95] text-white rounded-full px-8 py-2.5 shadow-[0_8px_24px_-8px_rgba(107,91,149,0.6)] font-medium"
             >
               {submitting ? (
                 <Loader2 className="animate-spin mr-2" size={16} />
               ) : null}
-              Pay ₹{selectedService?.price_inr?.toLocaleString("en-IN")}
+              Pay ₹{selectedService?.price_inr?.toLocaleString("en-IN")} ✦
             </Button>
           ) : (
             <Button
               data-testid="booking-next"
               disabled={!canNext}
               onClick={goNext}
-              className="bg-lavender-deep hover:bg-lavender-deeper text-ivory rounded-full px-7"
+              className="bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] hover:from-[#5A4C7E] hover:to-[#6B5B95] text-white rounded-full px-8 py-2.5 shadow-[0_8px_24px_-8px_rgba(107,91,149,0.5)] disabled:from-[#C8B6E2] disabled:to-[#C8B6E2] disabled:opacity-60 font-medium"
             >
               Continue <ArrowRight size={16} className="ml-1" />
             </Button>
