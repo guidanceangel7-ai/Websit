@@ -14,7 +14,7 @@ import hashlib
 import jwt
 import razorpay
 from email_service import send_booking_confirmation, send_order_confirmation
-from whatsapp_service import send_booking_whatsapp
+from whatsapp_service import send_booking_whatsapp, send_order_whatsapp
 
 
 ROOT_DIR = Path(__file__).parent
@@ -1364,11 +1364,20 @@ async def orders_verify(payload: OrderVerify):
             {"id": updated["applied_promo_id"]}, {"$inc": {"uses": 1}}
         )
 
-    # Best-effort confirmation emails
+    # Best-effort confirmation emails + WhatsApp
     try:
         await send_order_confirmation(updated)
     except Exception as e:
         logger.warning(f"Order email failed: {e}")
+    try:
+        wa_id = await send_order_whatsapp(updated)
+        if wa_id:
+            await db.orders.update_one(
+                {"id": payload.order_id},
+                {"$set": {"confirmation_whatsapp_id": wa_id}},
+            )
+    except Exception as e:
+        logger.warning(f"Order WhatsApp failed: {e}")
     return {"success": True, "order": updated, "is_mock": is_mock}
 
 

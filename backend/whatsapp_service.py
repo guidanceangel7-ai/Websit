@@ -1,24 +1,27 @@
-"""WhatsApp Cloud API (Meta) service.
+"""WhatsApp service powered by Twilio.
 
-Sends booking confirmation messages to customers after successful payment.
-Falls back to no-op if env vars are not configured. Never raises – all failures
-are logged so the booking flow is unaffected.
+Sends booking + order confirmation messages to customers after successful payment.
+Falls back to a no-op log if env vars are not configured. Never raises – all
+failures are logged so the booking/checkout flow is unaffected.
+
+Setup:
+  TWILIO_ACCOUNT_SID   - From console.twilio.com (starts with AC...)
+  TWILIO_AUTH_TOKEN    - From console.twilio.com
+  TWILIO_WHATSAPP_FROM - Your approved sender, e.g. "+13185938937"
+                         OR the sandbox: "+14155238886"
+                         (the "whatsapp:" prefix is added automatically)
 """
 import logging
 import os
 import re
 from pathlib import Path
-from typing import Optional, List, Dict, Any
+from typing import Optional, Dict, Any
 
-import httpx
 from dotenv import load_dotenv
 
-# Ensure .env loads even if imported before server's load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 logger = logging.getLogger(__name__)
-
-GRAPH_VERSION = "v22.0"
 
 
 def _cfg(key: str, default: str = "") -> str:
@@ -26,15 +29,27 @@ def _cfg(key: str, default: str = "") -> str:
 
 
 def _is_configured() -> bool:
-    pid = _cfg("WHATSAPP_PHONE_NUMBER_ID")
-    tok = _cfg("WHATSAPP_ACCESS_TOKEN")
-    return bool(pid and tok and not pid.startswith("PLACEHOLDER") and not tok.startswith("PLACEHOLDER"))
+    sid = _cfg("TWILIO_ACCOUNT_SID")
+    tok = _cfg("TWILIO_AUTH_TOKEN")
+    frm = _cfg("TWILIO_WHATSAPP_FROM")
+    return bool(
+        sid
+        and tok
+        and frm
+        and not sid.startswith("PLACEHOLDER")
+        and not tok.startswith("PLACEHOLDER")
+    )
 
 
 def _normalize_phone(phone: str) -> str:
-    """Strip + and non-digits. Returns digits-only string."""
+    """Return E.164-formatted number with leading +. Indian numbers without
+    country code get +91 prefixed."""
     cleaned = re.sub(r"[^\d]", "", phone or "")
-    return cleaned
+    if not cleaned:
+        return ""
+    if len(cleaned) == 10:
+        cleaned = "91" + cleaned
+    return "+" + cleaned
 
 
 def _format_amount(amt) -> str:
@@ -47,7 +62,6 @@ def _format_amount(amt) -> str:
 def _booking_text(booking: Dict[str, Any]) -> str:
     name = booking.get("customer_name", "Beautiful soul")
     service = booking.get("service_name", "Reading")
-    schedule = ""
     if booking.get("booking_date") and booking.get("booking_slot"):
         schedule = f"\n📅 {booking['booking_date']} · {booking['booking_slot']}"
     else:
@@ -58,93 +72,70 @@ def _booking_text(booking: Dict[str, Any]) -> str:
         f"Your booking with *Guidance Angel* is confirmed.\n\n"
         f"🌙 *Service:* {service}{schedule}\n"
         f"💜 *Paid:* {amount}\n\n"
-        f"I'll be holding space for you. If you have any specific questions or birth details to share, just reply to this message.\n\n"
+        f"I'll be holding space for you. If you have any specific questions or "
+        f"birth details to share, just reply to this message.\n\n"
         f"With love,\nJenika · Guidance Angel"
     )
 
 
-async def send_booking_whatsapp(booking: Dict[str, Any]) -> Optional[str]:
-    """Send WhatsApp confirmation. Returns message id or None.
+def _order_text(order: Dict[str, Any]) -> str:
+    name = order.get("customer_name", "Beautiful soul")
+    items = order.get("items") or []
+    items_lines = "\n".join(
+        f"  • {it.get('product_name', 'Item')} × {it.get('quantity', 1)}"
+        for it in items[:6]
+    )
+    if len(items) > 6:
+        items_lines += f"\n  • +{len(items) - 6} more"
+    total = _format_amount(order.get("total_inr", 0))
+    return (
+        f"✦ Thank you {name}!\n\n"
+        f"Your *Sacred Shop* order is confirmed.\n\n"
+        f"🛍️ *Items:*\n{items_lines}\n"
+        f"💜 *Total Paid:* {total}\n\n"
+        f"I'll personally energise everything before shipping. You'll receive "
+        f"a tracking link within 2 business days.\n\n"
+        f"With love,\nJenika · Guidance Angel"
+    )
 
-    Uses free-form text (works only inside a 24-hr customer-care window). For
-    first-touch confirmations in production, configure WHATSAPP_TEMPLATE_NAME to
-    use an approved template. We attempt template first when configured, then
-    fall back to free-form text.
-    """
+
+def _send(body: str, to_phone: str) -> Optional[str]:
+    """Synchronously send a WhatsApp message via Twilio. Returns message SID
+    or None on any failure."""
     if not _is_configured():
-        logger.info("WHATSAPP not configured – skipping send")
+        logger.info("Twilio WhatsApp not configured – skipping send")
         return None
 
-    phone_id = _cfg("WHATSAPP_PHONE_NUMBER_ID")
-    token = _cfg("WHATSAPP_ACCESS_TOKEN")
-    template_name = _cfg("WHATSAPP_TEMPLATE_NAME")
-    to_phone = _normalize_phone(booking.get("customer_phone", ""))
-    if not to_phone:
-        logger.warning("WhatsApp: empty/invalid customer phone, skipping")
+    to = _normalize_phone(to_phone)
+    if not to:
+        logger.warning("Twilio WhatsApp: empty/invalid customer phone, skipping")
         return None
 
-    url = f"https://graph.facebook.com/{GRAPH_VERSION}/{phone_id}/messages"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json",
-    }
+    try:
+        from twilio.rest import Client  # local import so service starts even if SDK missing
 
-    async def _post(payload: Dict[str, Any]) -> Optional[str]:
-        try:
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                resp = await client.post(url, json=payload, headers=headers)
-                if resp.status_code >= 400:
-                    logger.error(
-                        f"WhatsApp send failed {resp.status_code}: {resp.text[:300]}"
-                    )
-                    return None
-                data = resp.json()
-                return (
-                    data.get("messages", [{}])[0].get("id") if data.get("messages") else None
-                )
-        except Exception as e:
-            logger.error(f"WhatsApp request error: {e}")
-            return None
+        client = Client(_cfg("TWILIO_ACCOUNT_SID"), _cfg("TWILIO_AUTH_TOKEN"))
+        from_raw = _cfg("TWILIO_WHATSAPP_FROM").strip()
+        if not from_raw.startswith("+"):
+            from_raw = "+" + re.sub(r"[^\d]", "", from_raw)
+        msg = client.messages.create(
+            from_=f"whatsapp:{from_raw}",
+            to=f"whatsapp:{to}",
+            body=body,
+        )
+        logger.info(f"Twilio WhatsApp sent sid={msg.sid} to={to}")
+        return msg.sid
+    except Exception as e:
+        logger.error(f"Twilio WhatsApp send failed to={to}: {e}")
+        return None
 
-    # Prefer template if configured
-    if template_name:
-        params: List[Dict[str, str]] = [
-            {"type": "text", "text": booking.get("customer_name", "")},
-            {"type": "text", "text": booking.get("service_name", "")},
-            {
-                "type": "text",
-                "text": (
-                    f"{booking.get('booking_date')} · {booking.get('booking_slot')}"
-                    if booking.get("booking_date")
-                    else "Voice note within 48 hrs"
-                ),
-            },
-            {"type": "text", "text": _format_amount(booking.get("service_price_inr", 0))},
-        ]
-        template_payload = {
-            "messaging_product": "whatsapp",
-            "to": to_phone,
-            "type": "template",
-            "template": {
-                "name": template_name,
-                "language": {"code": _cfg("WHATSAPP_TEMPLATE_LANG", "en")},
-                "components": [{"type": "body", "parameters": params}],
-            },
-        }
-        msg_id = await _post(template_payload)
-        if msg_id:
-            logger.info(f"WhatsApp template sent id={msg_id} to={to_phone}")
-            return msg_id
-        # fall through to text send
 
-    # Free-form text fallback
-    text_payload = {
-        "messaging_product": "whatsapp",
-        "to": to_phone,
-        "type": "text",
-        "text": {"preview_url": False, "body": _booking_text(booking)},
-    }
-    msg_id = await _post(text_payload)
-    if msg_id:
-        logger.info(f"WhatsApp text sent id={msg_id} to={to_phone}")
-    return msg_id
+# Public helpers — keep async signatures so server.py call-sites don't change.
+async def send_booking_whatsapp(booking: Dict[str, Any]) -> Optional[str]:
+    """Send booking confirmation. Returns Twilio message SID or None."""
+    return _send(_booking_text(booking), booking.get("customer_phone", ""))
+
+
+async def send_order_whatsapp(order: Dict[str, Any]) -> Optional[str]:
+    """Send shop-order confirmation. Returns Twilio message SID or None."""
+    return _send(_order_text(order), order.get("customer_phone", ""))
