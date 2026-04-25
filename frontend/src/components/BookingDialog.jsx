@@ -335,9 +335,10 @@ export default function BookingDialog({
       };
       const rzp = new window.Razorpay(options);
       rzp.open();
+      // Razorpay modal is now visible — release our spinner
+      setSubmitting(false);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not start booking");
-    } finally {
       setSubmitting(false);
     }
   };

@@ -3,6 +3,7 @@ from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
+import asyncio
 import logging
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
@@ -700,12 +701,15 @@ async def create_order(payload: BookingCreate):
         is_mock = True
     else:
         try:
-            order = razorpay_client.order.create({
-                "amount": amount_paise,
-                "currency": "INR",
-                "receipt": booking_id[:40],
-                "payment_capture": 1,
-            })
+            order = await asyncio.to_thread(
+                razorpay_client.order.create,
+                {
+                    "amount": amount_paise,
+                    "currency": "INR",
+                    "receipt": booking_id[:40],
+                    "payment_capture": 1,
+                },
+            )
             razorpay_order_id = order["id"]
             is_mock = False
         except Exception as e:
@@ -793,25 +797,29 @@ async def verify_payment(payload: VerifyPayment):
         await db.promotions.update_one(
             {"id": updated["applied_promo_id"]}, {"$inc": {"uses": 1}}
         )
-    # Fire-and-forget email + WhatsApp confirmation (won't block / fail the response)
-    try:
-        email_id = await send_booking_confirmation(updated)
-        if email_id:
-            await db.bookings.update_one(
-                {"id": payload.booking_id},
-                {"$set": {"confirmation_email_id": email_id}}
-            )
-    except Exception as e:
-        logger.warning(f"Email send failed (non-blocking): {e}")
-    try:
-        wa_id = await send_booking_whatsapp(updated)
-        if wa_id:
-            await db.bookings.update_one(
-                {"id": payload.booking_id},
-                {"$set": {"confirmation_whatsapp_id": wa_id}}
-            )
-    except Exception as e:
-        logger.warning(f"WhatsApp send failed (non-blocking): {e}")
+    # Truly fire-and-forget — don't block the API response while emails / WhatsApp
+    # round-trip to Resend / Twilio (those add 2-5 sec on slow networks).
+    async def _post_payment_notify(booking_id: str, doc: dict):
+        try:
+            email_id = await send_booking_confirmation(doc)
+            if email_id:
+                await db.bookings.update_one(
+                    {"id": booking_id},
+                    {"$set": {"confirmation_email_id": email_id}},
+                )
+        except Exception as e:
+            logger.warning(f"Booking email send failed (background): {e}")
+        try:
+            wa_id = await send_booking_whatsapp(doc)
+            if wa_id:
+                await db.bookings.update_one(
+                    {"id": booking_id},
+                    {"$set": {"confirmation_whatsapp_id": wa_id}},
+                )
+        except Exception as e:
+            logger.warning(f"Booking WhatsApp failed (background): {e}")
+
+    asyncio.create_task(_post_payment_notify(payload.booking_id, updated))
     return {"success": True, "booking": updated, "is_mock": is_mock}
 
 
@@ -1574,12 +1582,15 @@ async def orders_create(payload: OrderCreate):
         is_mock = True
     else:
         try:
-            order = razorpay_client.order.create({
-                "amount": total_paise,
-                "currency": "INR",
-                "receipt": order_id[:40],
-                "payment_capture": 1,
-            })
+            order = await asyncio.to_thread(
+                razorpay_client.order.create,
+                {
+                    "amount": total_paise,
+                    "currency": "INR",
+                    "receipt": order_id[:40],
+                    "payment_capture": 1,
+                },
+            )
             rzp_order_id = order["id"]
             is_mock = False
         except Exception as e:
@@ -1660,20 +1671,23 @@ async def orders_verify(payload: OrderVerify):
             {"id": updated["applied_promo_id"]}, {"$inc": {"uses": 1}}
         )
 
-    # Best-effort confirmation emails + WhatsApp
-    try:
-        await send_order_confirmation(updated)
-    except Exception as e:
-        logger.warning(f"Order email failed: {e}")
-    try:
-        wa_id = await send_order_whatsapp(updated)
-        if wa_id:
-            await db.orders.update_one(
-                {"id": payload.order_id},
-                {"$set": {"confirmation_whatsapp_id": wa_id}},
-            )
-    except Exception as e:
-        logger.warning(f"Order WhatsApp failed: {e}")
+    # Truly fire-and-forget confirmation notifications.
+    async def _notify_order(order_id: str, doc: dict):
+        try:
+            await send_order_confirmation(doc)
+        except Exception as e:
+            logger.warning(f"Order email failed (background): {e}")
+        try:
+            wa_id = await send_order_whatsapp(doc)
+            if wa_id:
+                await db.orders.update_one(
+                    {"id": order_id},
+                    {"$set": {"confirmation_whatsapp_id": wa_id}},
+                )
+        except Exception as e:
+            logger.warning(f"Order WhatsApp failed (background): {e}")
+
+    asyncio.create_task(_notify_order(payload.order_id, updated))
     return {"success": True, "order": updated, "is_mock": is_mock}
 
 
