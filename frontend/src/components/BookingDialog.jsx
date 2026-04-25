@@ -281,14 +281,14 @@ export default function BookingDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         data-testid="booking-dialog"
-        className="max-w-2xl bg-ivory border-peach/40 rounded-3xl p-0 overflow-hidden"
+        className="max-w-2xl !bg-[#FFFFFF] border-2 border-peach/40 rounded-3xl p-0 overflow-hidden shadow-[0_30px_80px_-20px_rgba(58,46,93,0.6)]"
       >
-        <div className="bg-gradient-to-br from-lavender-soft/60 to-blush/40 px-6 sm:px-8 py-6 border-b border-peach/30">
+        <div className="bg-gradient-to-br from-[#E6DDF1] via-[#F4C6D6] to-[#FBE4D5] px-6 sm:px-8 py-6 border-b border-peach/30">
           <DialogHeader>
             <DialogTitle className="font-display text-2xl text-ink-plum text-center">
               {stepLabel}
             </DialogTitle>
-            <DialogDescription className="text-center text-ink-plum/60 text-sm">
+            <DialogDescription className="text-center text-ink-plum/70 text-sm">
               {selectedService
                 ? `${selectedService.name} · ₹${selectedService.price_inr.toLocaleString("en-IN")}`
                 : "Begin your guidance journey"}
@@ -299,7 +299,7 @@ export default function BookingDialog({
           </div>
         </div>
 
-        <div className="px-6 sm:px-8 py-6 max-h-[60vh] overflow-y-auto">
+        <div className="px-6 sm:px-8 py-6 max-h-[60vh] overflow-y-auto bg-[#FFFFFF]">
           {cur === "service" && (
             <div data-testid="step-service" className="grid gap-3">
               {services?.map((s) => (
@@ -310,10 +310,10 @@ export default function BookingDialog({
                     setSelectedService(s);
                     setStep(1);
                   }}
-                  className="text-left rounded-2xl border border-peach/30 bg-white px-5 py-4 hover:border-lavender-deep hover:shadow-soft transition flex items-center justify-between gap-4"
+                  className="text-left rounded-2xl border-2 border-peach/40 bg-[#FBF4E8] px-5 py-4 hover:border-lavender-deep hover:bg-white hover:shadow-soft transition flex items-center justify-between gap-4"
                 >
                   <div>
-                    <div className="text-[11px] uppercase tracking-[0.22em] text-peach-deep">
+                    <div className="text-[11px] uppercase tracking-[0.22em] text-peach-deep font-semibold">
                       {s.is_voice_note
                         ? "Voice Note"
                         : `${s.duration_minutes} min`}
@@ -333,10 +333,10 @@ export default function BookingDialog({
           {cur === "schedule" && (
             <div data-testid="step-schedule" className="grid sm:grid-cols-2 gap-6">
               <div>
-                <Label className="text-xs uppercase tracking-[0.22em] text-peach-deep">
-                  Pick a date
+                <Label className="text-xs uppercase tracking-[0.22em] text-peach-deep font-semibold">
+                  ✦ Pick a date
                 </Label>
-                <div className="mt-3 rounded-2xl border border-peach/30 bg-white p-2">
+                <div className="mt-3 rounded-2xl border-2 border-peach/40 bg-[#FBF4E8] p-2">
                   <Calendar
                     mode="single"
                     selected={date}
@@ -345,22 +345,22 @@ export default function BookingDialog({
                       setSlot(null);
                     }}
                     disabled={disablePast}
-                    className="rounded-2xl"
+                    className="rounded-2xl bg-[#FBF4E8]"
                     data-testid="booking-calendar"
                   />
                 </div>
-                <p className="text-xs text-ink-plum/60 mt-2">
+                <p className="text-xs text-ink-plum/70 mt-2 italic">
                   Sundays are reserved for rest. Slots: 10 AM – 8 PM IST.
                 </p>
               </div>
               <div>
-                <Label className="text-xs uppercase tracking-[0.22em] text-peach-deep">
-                  Available time slots
+                <Label className="text-xs uppercase tracking-[0.22em] text-peach-deep font-semibold">
+                  ✦ Available time slots
                 </Label>
-                <div className="mt-3 grid grid-cols-2 gap-2 max-h-[280px] overflow-y-auto pr-1">
+                <div className="mt-3 grid grid-cols-2 gap-2 max-h-[300px] overflow-y-auto pr-1">
                   {!date && (
-                    <div className="col-span-2 text-sm text-ink-plum/60">
-                      Pick a date to see slots.
+                    <div className="col-span-2 text-sm text-ink-plum/60 bg-peach/10 rounded-xl p-4 text-center italic">
+                      Pick a date to see available slots ✦
                     </div>
                   )}
                   {date && loadingSlots && (
@@ -369,7 +369,7 @@ export default function BookingDialog({
                     </div>
                   )}
                   {date && !loadingSlots && slots.length === 0 && (
-                    <div className="col-span-2 text-sm text-ink-plum/60">
+                    <div className="col-span-2 text-sm text-ink-plum/70 bg-peach/15 rounded-xl p-4 text-center">
                       No slots available – please pick another date.
                     </div>
                   )}
@@ -378,10 +378,10 @@ export default function BookingDialog({
                       key={s}
                       data-testid={`slot-${s.replace(/[: ]/g, "-")}`}
                       onClick={() => setSlot(s)}
-                      className={`rounded-full px-3 py-2 text-sm border transition ${
+                      className={`rounded-full px-3 py-2.5 text-sm border-2 transition font-medium ${
                         slot === s
-                          ? "bg-lavender-deep text-ivory border-lavender-deep"
-                          : "bg-white border-peach/40 text-ink-plum hover:border-lavender-deep"
+                          ? "bg-lavender-deep text-ivory border-lavender-deep shadow-[0_4px_14px_rgba(107,91,149,0.4)]"
+                          : "bg-[#FBF4E8] border-peach/40 text-ink-plum hover:border-lavender-deep hover:bg-white"
                       }`}
                     >
                       <Clock size={12} className="inline mr-1.5 -mt-0.5" /> {s}
@@ -395,45 +395,55 @@ export default function BookingDialog({
           {cur === "details" && (
             <div data-testid="step-details" className="grid sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
-                <Label htmlFor="customer_name">Full name *</Label>
+                <Label htmlFor="customer_name" className="text-ink-plum font-semibold">
+                  Full name <span className="text-peach-deep">*</span>
+                </Label>
                 <Input
                   id="customer_name"
                   data-testid="input-name"
+                  placeholder="Your beautiful name"
                   value={form.customer_name}
                   onChange={(e) =>
                     setForm({ ...form, customer_name: e.target.value })
                   }
-                  className="mt-2 rounded-xl bg-white border-peach/30 focus-visible:ring-peach"
+                  className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
               <div>
-                <Label htmlFor="customer_email">Email *</Label>
+                <Label htmlFor="customer_email" className="text-ink-plum font-semibold">
+                  Email <span className="text-peach-deep">*</span>
+                </Label>
                 <Input
                   id="customer_email"
                   type="email"
                   data-testid="input-email"
+                  placeholder="you@example.com"
                   value={form.customer_email}
                   onChange={(e) =>
                     setForm({ ...form, customer_email: e.target.value })
                   }
-                  className="mt-2 rounded-xl bg-white border-peach/30 focus-visible:ring-peach"
+                  className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
               <div>
-                <Label htmlFor="customer_phone">WhatsApp number *</Label>
+                <Label htmlFor="customer_phone" className="text-ink-plum font-semibold">
+                  WhatsApp number <span className="text-peach-deep">*</span>
+                </Label>
                 <Input
                   id="customer_phone"
                   data-testid="input-phone"
-                  placeholder="+91…"
+                  placeholder="+91 98XXX XXXXX"
                   value={form.customer_phone}
                   onChange={(e) =>
                     setForm({ ...form, customer_phone: e.target.value })
                   }
-                  className="mt-2 rounded-xl bg-white border-peach/30 focus-visible:ring-peach"
+                  className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
               <div>
-                <Label htmlFor="birth_date">Birth date</Label>
+                <Label htmlFor="birth_date" className="text-ink-plum font-semibold">
+                  Birth date
+                </Label>
                 <Input
                   id="birth_date"
                   type="date"
@@ -442,11 +452,13 @@ export default function BookingDialog({
                   onChange={(e) =>
                     setForm({ ...form, birth_date: e.target.value })
                   }
-                  className="mt-2 rounded-xl bg-white border-peach/30 focus-visible:ring-peach"
+                  className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
               <div>
-                <Label htmlFor="birth_time">Birth time</Label>
+                <Label htmlFor="birth_time" className="text-ink-plum font-semibold">
+                  Birth time
+                </Label>
                 <Input
                   id="birth_time"
                   type="time"
@@ -455,11 +467,13 @@ export default function BookingDialog({
                   onChange={(e) =>
                     setForm({ ...form, birth_time: e.target.value })
                   }
-                  className="mt-2 rounded-xl bg-white border-peach/30 focus-visible:ring-peach"
+                  className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
               <div className="sm:col-span-2">
-                <Label htmlFor="birth_place">Birth place</Label>
+                <Label htmlFor="birth_place" className="text-ink-plum font-semibold">
+                  Birth place
+                </Label>
                 <Input
                   id="birth_place"
                   data-testid="input-birth-place"
@@ -468,22 +482,23 @@ export default function BookingDialog({
                   onChange={(e) =>
                     setForm({ ...form, birth_place: e.target.value })
                   }
-                  className="mt-2 rounded-xl bg-white border-peach/30 focus-visible:ring-peach"
+                  className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
               <div className="sm:col-span-2">
-                <Label htmlFor="question">
+                <Label htmlFor="question" className="text-ink-plum font-semibold">
                   Question / topic for the reading
                 </Label>
                 <Textarea
                   id="question"
                   data-testid="input-question"
+                  placeholder="Share what's on your heart…"
                   rows={3}
                   value={form.question}
                   onChange={(e) =>
                     setForm({ ...form, question: e.target.value })
                   }
-                  className="mt-2 rounded-xl bg-white border-peach/30 focus-visible:ring-peach"
+                  className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep"
                 />
               </div>
             </div>
@@ -491,40 +506,40 @@ export default function BookingDialog({
 
           {cur === "pay" && (
             <div data-testid="step-pay" className="space-y-5">
-              <div className="rounded-2xl bg-white border border-peach/30 p-5">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-peach-deep">
-                  Booking Summary
+              <div className="rounded-2xl bg-[#FBF4E8] border-2 border-peach/40 p-5">
+                <div className="text-[11px] uppercase tracking-[0.22em] text-peach-deep font-semibold">
+                  ✦ Booking Summary
                 </div>
                 <div className="mt-3 grid sm:grid-cols-2 gap-3 text-sm">
                   <div>
-                    <div className="text-ink-plum/60">Service</div>
-                    <div className="font-display text-lg text-ink-plum">
+                    <div className="text-ink-plum/60 text-xs uppercase tracking-wider">Service</div>
+                    <div className="font-display text-lg text-ink-plum mt-0.5">
                       {selectedService?.name}
                     </div>
                   </div>
                   {!isVoiceNote && date && slot && (
                     <div>
-                      <div className="text-ink-plum/60">Date & time</div>
-                      <div className="font-display text-lg text-ink-plum">
+                      <div className="text-ink-plum/60 text-xs uppercase tracking-wider">Date & time</div>
+                      <div className="font-display text-lg text-ink-plum mt-0.5">
                         {format(date, "EEE, dd MMM yyyy")} · {slot}
                       </div>
                     </div>
                   )}
                   <div>
-                    <div className="text-ink-plum/60">For</div>
-                    <div className="text-ink-plum">
+                    <div className="text-ink-plum/60 text-xs uppercase tracking-wider">For</div>
+                    <div className="text-ink-plum mt-0.5">
                       {form.customer_name} ({form.customer_email})
                     </div>
                   </div>
                   <div>
-                    <div className="text-ink-plum/60">WhatsApp</div>
-                    <div className="text-ink-plum">{form.customer_phone}</div>
+                    <div className="text-ink-plum/60 text-xs uppercase tracking-wider">WhatsApp</div>
+                    <div className="text-ink-plum mt-0.5">{form.customer_phone}</div>
                   </div>
                 </div>
 
-                <div className="mt-5 pt-4 border-t border-peach/20 flex items-center justify-between">
-                  <div className="text-sm text-ink-plum/70">Total payable</div>
-                  <div className="font-display text-2xl text-lavender-deep">
+                <div className="mt-5 pt-4 border-t-2 border-peach/30 flex items-center justify-between">
+                  <div className="text-sm text-ink-plum/70 uppercase tracking-wider font-semibold">Total payable</div>
+                  <div className="font-display text-3xl text-lavender-deep">
                     ₹{selectedService?.price_inr?.toLocaleString("en-IN")}
                   </div>
                 </div>
@@ -542,7 +557,7 @@ export default function BookingDialog({
           )}
         </div>
 
-        <div className="border-t border-peach/30 bg-ivory px-6 sm:px-8 py-4 flex items-center justify-between gap-3">
+        <div className="border-t border-peach/30 bg-[#FBF4E8] px-6 sm:px-8 py-4 flex items-center justify-between gap-3">
           <Button
             variant="ghost"
             data-testid="booking-back"
