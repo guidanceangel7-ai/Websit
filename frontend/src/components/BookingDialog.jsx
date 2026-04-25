@@ -569,36 +569,6 @@ export default function BookingDialog({
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
-              <div>
-                <Label htmlFor="birth_time" className="text-ink-plum font-semibold">
-                  Birth time
-                </Label>
-                <Input
-                  id="birth_time"
-                  type="time"
-                  data-testid="input-birth-time"
-                  value={form.birth_time}
-                  onChange={(e) =>
-                    setForm({ ...form, birth_time: e.target.value })
-                  }
-                  className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
-                />
-              </div>
-              <div className="sm:col-span-2">
-                <Label htmlFor="birth_place" className="text-ink-plum font-semibold">
-                  Birth place
-                </Label>
-                <Input
-                  id="birth_place"
-                  data-testid="input-birth-place"
-                  placeholder="City, Country"
-                  value={form.birth_place}
-                  onChange={(e) =>
-                    setForm({ ...form, birth_place: e.target.value })
-                  }
-                  className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
-                />
-              </div>
               <div className="sm:col-span-2">
                 <Label htmlFor="question" className="text-ink-plum font-semibold">
                   Question / topic for the reading
