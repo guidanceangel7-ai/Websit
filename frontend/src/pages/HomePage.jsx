@@ -3,6 +3,7 @@ import axios from "axios";
 import Header from "../components/Header";
 import Hero from "../components/Hero";
 import About from "../components/About";
+import Gallery from "../components/Gallery";
 import Services from "../components/Services";
 import Testimonials from "../components/Testimonials";
 import FAQ from "../components/FAQ";
@@ -51,6 +52,7 @@ export default function HomePage() {
       <main>
         <Hero onBookNow={() => openBooking(null)} />
         <About />
+        <Gallery />
         <Services
           services={services}
           onSelect={(s) => openBooking(s)}

@@ -214,6 +214,15 @@ async def available_slots(date_str: str):
         raise HTTPException(status_code=400, detail="Invalid date format, use YYYY-MM-DD")
     if d.weekday() == 6:  # Sunday
         return {"date": date_str, "slots": [], "is_open": False, "message": "Closed on Sundays"}
+    # Check admin block-out
+    blocked = await db.blocked_dates.find_one({"date": date_str}, {"_id": 0})
+    if blocked:
+        return {
+            "date": date_str,
+            "slots": [],
+            "is_open": False,
+            "message": blocked.get("reason") or "Unavailable on this date",
+        }
     # Generate slots 10:00 to 19:30 (last slot starts at 7:30 PM)
     all_slots = []
     for hour in range(10, 20):
@@ -364,6 +373,45 @@ async def admin_stats(_admin: str = Depends(verify_admin)):
     revenue_doc = await db.bookings.aggregate(revenue_pipeline).to_list(length=1)
     revenue = revenue_doc[0]["revenue"] if revenue_doc else 0
     return {"total_bookings": total, "paid": paid, "pending": pending, "revenue_inr": revenue}
+
+
+# --- Block-out dates (admin) ---
+class BlockedDate(BaseModel):
+    date: str  # YYYY-MM-DD
+    reason: Optional[str] = None
+
+
+@api_router.get("/admin/blocked-dates")
+async def list_blocked_dates(_admin: str = Depends(verify_admin)):
+    docs = await db.blocked_dates.find({}, {"_id": 0}).sort("date", 1).to_list(length=500)
+    return docs
+
+
+@api_router.post("/admin/blocked-dates")
+async def add_blocked_date(payload: BlockedDate, _admin: str = Depends(verify_admin)):
+    try:
+        datetime.strptime(payload.date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format, use YYYY-MM-DD")
+    await db.blocked_dates.update_one(
+        {"date": payload.date},
+        {"$set": {"date": payload.date, "reason": payload.reason or "Unavailable"}},
+        upsert=True,
+    )
+    return {"success": True, "date": payload.date}
+
+
+@api_router.delete("/admin/blocked-dates/{date_str}")
+async def remove_blocked_date(date_str: str, _admin: str = Depends(verify_admin)):
+    res = await db.blocked_dates.delete_one({"date": date_str})
+    return {"success": True, "removed": res.deleted_count}
+
+
+# Public: list blocked dates so calendar can mark them
+@api_router.get("/blocked-dates")
+async def public_blocked_dates():
+    docs = await db.blocked_dates.find({}, {"_id": 0, "reason": 0}).to_list(length=500)
+    return [d["date"] for d in docs]
 
 
 # ============== Wire-up ==============

@@ -72,6 +72,7 @@ export default function BookingDialog({
   const [date, setDate] = useState(null);
   const [slot, setSlot] = useState(null);
   const [slots, setSlots] = useState([]);
+  const [blockedDates, setBlockedDates] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -106,6 +107,11 @@ export default function BookingDialog({
         question: "",
         notes: "",
       });
+      // fetch blocked dates so calendar can disable them
+      axios
+        .get(`${API}/blocked-dates`)
+        .then((r) => setBlockedDates(r.data || []))
+        .catch(() => setBlockedDates([]));
     }
   }, [open, initialService]);
 
@@ -258,13 +264,19 @@ export default function BookingDialog({
 
   const cur = STEPS[step];
 
-  // Disable past dates for calendar
+  // Disable past dates, far future, Sundays, and admin-blocked dates
   const disablePast = (d) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const max = new Date();
     max.setMonth(max.getMonth() + 2);
-    return d < today || d > max || d.getDay() === 0; // disable Sundays
+    const dayStr = format(d, "yyyy-MM-dd");
+    return (
+      d < today ||
+      d > max ||
+      d.getDay() === 0 ||
+      blockedDates.includes(dayStr)
+    );
   };
 
   return (

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { BRAND } from "../lib/brand";
-import { LogOut, RefreshCw, Phone, Mail, MessageCircle } from "lucide-react";
+import { LogOut, RefreshCw, Phone, Mail, MessageCircle, Plus, X, CalendarOff } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -13,6 +13,7 @@ import {
 } from "../components/ui/table";
 import { Badge } from "../components/ui/badge";
 import { Toaster } from "../components/ui/sonner";
+import { toast } from "sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -28,10 +29,14 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [bookings, setBookings] = useState([]);
+  const [blockedDates, setBlockedDates] = useState([]);
+  const [newBlockDate, setNewBlockDate] = useState("");
+  const [newBlockReason, setNewBlockReason] = useState("");
   const [loading, setLoading] = useState(true);
 
   const token =
     typeof window !== "undefined" ? localStorage.getItem("ga_admin_token") : null;
+  const headers = { Authorization: `Bearer ${token}` };
 
   useEffect(() => {
     if (!token) {
@@ -45,13 +50,14 @@ export default function AdminDashboard() {
   const refresh = async () => {
     setLoading(true);
     try {
-      const headers = { Authorization: `Bearer ${token}` };
-      const [s, b] = await Promise.all([
+      const [s, b, bd] = await Promise.all([
         axios.get(`${API}/admin/stats`, { headers }),
         axios.get(`${API}/admin/bookings`, { headers }),
+        axios.get(`${API}/admin/blocked-dates`, { headers }),
       ]);
       setStats(s.data);
       setBookings(b.data || []);
+      setBlockedDates(bd.data || []);
     } catch (e) {
       if (e?.response?.status === 401) {
         localStorage.removeItem("ga_admin_token");
@@ -59,6 +65,34 @@ export default function AdminDashboard() {
       }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const addBlocked = async (e) => {
+    e.preventDefault();
+    if (!newBlockDate) return;
+    try {
+      await axios.post(
+        `${API}/admin/blocked-dates`,
+        { date: newBlockDate, reason: newBlockReason || "Unavailable" },
+        { headers }
+      );
+      toast.success("Date blocked ✦");
+      setNewBlockDate("");
+      setNewBlockReason("");
+      refresh();
+    } catch {
+      toast.error("Could not block date");
+    }
+  };
+
+  const removeBlocked = async (date) => {
+    try {
+      await axios.delete(`${API}/admin/blocked-dates/${date}`, { headers });
+      toast.success("Date unblocked");
+      refresh();
+    } catch {
+      toast.error("Could not remove");
     }
   };
 
@@ -139,6 +173,85 @@ export default function AdminDashboard() {
               </div>
             </div>
           ))}
+        </div>
+
+        {/* Block-out dates */}
+        <div className="mt-10 rounded-3xl bg-white/85 border border-peach/30 p-6 sm:p-8">
+          <div className="flex items-center gap-2">
+            <CalendarOff size={18} className="text-lavender-deep" />
+            <h2 className="font-display text-xl text-ink-plum">
+              Block-out dates
+            </h2>
+          </div>
+          <p className="text-sm text-ink-plum/60 mt-1">
+            Mark dates when you're unavailable. Booking calendar will hide them.
+          </p>
+
+          <form
+            onSubmit={addBlocked}
+            data-testid="blocked-form"
+            className="mt-5 flex flex-wrap items-end gap-3"
+          >
+            <div>
+              <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep">
+                Date
+              </label>
+              <input
+                type="date"
+                data-testid="blocked-date-input"
+                value={newBlockDate}
+                onChange={(e) => setNewBlockDate(e.target.value)}
+                className="mt-1.5 rounded-xl border border-peach/30 bg-white px-3 py-2 outline-none focus:border-lavender-deep focus:ring-2 focus:ring-peach/40"
+                required
+              />
+            </div>
+            <div className="flex-1 min-w-[200px]">
+              <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep">
+                Reason (optional)
+              </label>
+              <input
+                data-testid="blocked-reason-input"
+                value={newBlockReason}
+                onChange={(e) => setNewBlockReason(e.target.value)}
+                placeholder="Vacation, retreat, personal day…"
+                className="mt-1.5 w-full rounded-xl border border-peach/30 bg-white px-3 py-2 outline-none focus:border-lavender-deep focus:ring-2 focus:ring-peach/40"
+              />
+            </div>
+            <button
+              type="submit"
+              data-testid="blocked-add-btn"
+              className="inline-flex items-center gap-1.5 bg-lavender-deep text-ivory rounded-full px-5 py-2.5 text-sm hover:bg-lavender-deeper"
+            >
+              <Plus size={14} /> Block
+            </button>
+          </form>
+
+          <div className="mt-6 flex flex-wrap gap-2">
+            {blockedDates.length === 0 && (
+              <span className="text-sm text-ink-plum/60">
+                No blocked dates yet.
+              </span>
+            )}
+            {blockedDates.map((bd) => (
+              <span
+                key={bd.date}
+                data-testid={`blocked-${bd.date}`}
+                className="inline-flex items-center gap-2 bg-peach/15 border border-peach/40 text-ink-plum rounded-full pl-3 pr-1 py-1 text-sm"
+              >
+                <span className="font-medium">{bd.date}</span>
+                {bd.reason && (
+                  <span className="text-ink-plum/60 text-xs">· {bd.reason}</span>
+                )}
+                <button
+                  onClick={() => removeBlocked(bd.date)}
+                  className="ml-1 w-6 h-6 inline-flex items-center justify-center rounded-full hover:bg-peach/40"
+                  aria-label="Remove"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+          </div>
         </div>
 
         <div className="mt-10 rounded-3xl bg-white/85 border border-peach/30 overflow-hidden">

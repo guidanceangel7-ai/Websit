@@ -19,7 +19,13 @@ export const BRAND = {
   brandBoard:
     "https://customer-assets.emergentagent.com/job_guidance-angel/artifacts/egbzl0sq_ChatGPT%20Image%20Apr%2023%2C%202026%2C%2004_18_28%20PM.png",
   jenikaPhoto:
-    "https://static.wixstatic.com/media/8a9eb1_eaaaf944f4384f98bd66966c5aa46c33~mv2.jpeg/v1/fill/w_357,h_378,al_c,q_80,usm_0.66_1.00_0.01,enc_avif,quality_auto/WhatsApp%20Image%202025-06-12%20at%2015_27_33.jpeg",
+    "https://customer-assets.emergentagent.com/job_guidance-angel/artifacts/8zzwdxlk_WhatsApp%20Image%202026-04-25%20at%2011.22.34%20AM%20%281%29.jpeg",
+  jenikaPhotoTable:
+    "https://customer-assets.emergentagent.com/job_guidance-angel/artifacts/2uib3bc8_WhatsApp%20Image%202026-04-25%20at%2011.22.20%20AM.jpeg",
+  jenikaStageMic:
+    "https://customer-assets.emergentagent.com/job_guidance-angel/artifacts/upk7yj49_WhatsApp%20Image%202026-04-25%20at%2011.22.34%20AM.jpeg",
+  jenikaStageSpeaking:
+    "https://customer-assets.emergentagent.com/job_guidance-angel/artifacts/ue8y873p_WhatsApp%20Image%202026-04-25%20at%2011.22.35%20AM.jpeg",
   heroBackdrop:
     "https://images.pexels.com/photos/2088142/pexels-photo-2088142.jpeg",
   tarotImg:
@@ -29,6 +35,24 @@ export const BRAND = {
   celestialImg:
     "https://images.unsplash.com/photo-1576582956388-13f35cc4c411?crop=entropy&cs=srgb&fm=jpg&q=85&w=900",
 };
+
+export const GALLERY = [
+  {
+    src: "https://customer-assets.emergentagent.com/job_guidance-angel/artifacts/2uib3bc8_WhatsApp%20Image%202026-04-25%20at%2011.22.20%20AM.jpeg",
+    label: "Live Reading Setup",
+    caption: "Sacred space — crystals, angels & the cards",
+  },
+  {
+    src: "https://customer-assets.emergentagent.com/job_guidance-angel/artifacts/upk7yj49_WhatsApp%20Image%202026-04-25%20at%2011.22.34%20AM.jpeg",
+    label: "On Stage",
+    caption: "Featured speaker at celebrity events",
+  },
+  {
+    src: "https://customer-assets.emergentagent.com/job_guidance-angel/artifacts/ue8y873p_WhatsApp%20Image%202026-04-25%20at%2011.22.35%20AM.jpeg",
+    label: "Spreading Light",
+    caption: "Sharing wisdom with hundreds at a time",
+  },
+];
 
 export const FAQS = [
   {
