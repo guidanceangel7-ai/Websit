@@ -134,17 +134,17 @@ export default function Hero({ onBookNow }) {
               />
             </div>
 
-            {/* Floating mini cards */}
+            {/* Floating core-quality chips */}
             <motion.div
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
               className="absolute -left-6 sm:-left-10 top-10 glass-card rounded-2xl px-4 py-3 shadow-soft"
             >
-              <div className="text-[10px] uppercase tracking-[0.2em] text-peach-deep">
-                Voice Note
+              <div className="text-[10px] uppercase tracking-[0.22em] text-peach-deep font-bold">
+                ✦ Intuitive
               </div>
-              <div className="font-display text-base text-ink-plum">
-                ₹550 · Question Reading
+              <div className="font-display italic text-base text-ink-plum">
+                Soul-led Insight
               </div>
             </motion.div>
 
@@ -153,11 +153,11 @@ export default function Hero({ onBookNow }) {
               transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
               className="absolute -right-4 sm:-right-8 bottom-12 glass-card rounded-2xl px-4 py-3 shadow-soft"
             >
-              <div className="text-[10px] uppercase tracking-[0.2em] text-peach-deep">
-                Akashic
+              <div className="text-[10px] uppercase tracking-[0.22em] text-peach-deep font-bold">
+                ✦ Authentic
               </div>
-              <div className="font-display text-base text-ink-plum">
-                60-min Soul Journey
+              <div className="font-display italic text-base text-ink-plum">
+                Heart-aligned Care
               </div>
             </motion.div>
           </motion.div>
