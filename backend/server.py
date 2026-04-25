@@ -397,55 +397,63 @@ SEED_TESTIMONIALS = [
 ]
 
 
-SEED_PRODUCTS = [
+SEED_PRODUCT_CATEGORIES = [
     {
-        "id": "p-crystals",
-        "name": "Energised Crystals Set",
-        "blurb": "Hand-picked rose quartz, amethyst, citrine and clear quartz — cleansed and charged with reiki for their highest purpose.",
-        "price_inr": 1499,
-        "badge": "Most Loved",
-        "image_url": None,
-        "accent": "from-[#C8B6E2] to-[#E6DDF1]",
-        "shop_url": "",
-        "in_stock": True,
+        "id": "candles",
+        "name": "Intention Candles",
+        "description": "Hand-poured soy wax candles infused with herbs, oils and mantras for love, abundance, protection and more.",
+        "accent": "from-[#F4C6D6] to-[#FBE4D5]",
+        "icon": "flame",
         "order": 1,
     },
     {
-        "id": "p-candles",
-        "name": "Intention Candle",
-        "blurb": "Soy wax candle infused with herbs, essential oils and mantras — for love, abundance, protection or clarity rituals.",
-        "price_inr": 799,
-        "badge": "Bestseller",
-        "image_url": None,
-        "accent": "from-[#F4C6D6] to-[#FBE4D5]",
-        "shop_url": "",
-        "in_stock": True,
+        "id": "crystals",
+        "name": "Energised Crystals",
+        "description": "Hand-picked, cleansed and reiki-charged crystals — singles and curated sets.",
+        "accent": "from-[#C8B6E2] to-[#E6DDF1]",
+        "icon": "gem",
         "order": 2,
     },
     {
-        "id": "p-oils",
-        "name": "Healing Oil Blend",
-        "blurb": "Sacred 30 ml roll-on blend crafted with crystals, herbs and pure essential oils. Anoint candles, pulse points and altars.",
-        "price_inr": 999,
-        "badge": "New",
-        "image_url": None,
+        "id": "oils",
+        "name": "Healing Oils",
+        "description": "Sacred roll-on blends of crystals, herbs and pure essential oils for ritual & daily use.",
         "accent": "from-[#EBB99A] to-[#F4C6D6]",
-        "shop_url": "",
-        "in_stock": True,
+        "icon": "droplet",
         "order": 3,
     },
+]
+
+SEED_PRODUCTS = [
+    # Candles (variants)
+    {"id": "candle-money", "product_category_id": "candles", "name": "Money Candle", "blurb": "Citrine + bay-leaf candle to align you with abundance, prosperity and overflow. Burn during a new-moon.", "price_inr": 799, "badge": "Bestseller", "image_url": None, "accent": "from-[#EBB99A] to-[#F4C6D6]", "in_stock": True, "order": 1},
+    {"id": "candle-love", "product_category_id": "candles", "name": "Love Candle", "blurb": "Rose-quartz + jasmine candle to draw in self-love, romance and harmonious relationships.", "price_inr": 799, "badge": "Most Loved", "image_url": None, "accent": "from-[#F4C6D6] to-[#FBE4D5]", "in_stock": True, "order": 2},
+    {"id": "candle-protection", "product_category_id": "candles", "name": "Protection Candle", "blurb": "Black tourmaline + sage candle to shield your aura, clear negative energy and protect your space.", "price_inr": 899, "badge": None, "image_url": None, "accent": "from-[#9B8AC4] to-[#6B5B95]", "in_stock": True, "order": 3},
+    {"id": "candle-clarity", "product_category_id": "candles", "name": "Clarity Candle", "blurb": "Clear quartz + lavender candle to dissolve confusion and bring crystal-clear answers.", "price_inr": 799, "badge": "New", "image_url": None, "accent": "from-[#C8B6E2] to-[#E6DDF1]", "in_stock": True, "order": 4},
+
+    # Crystals (variants)
+    {"id": "crystal-rosequartz", "product_category_id": "crystals", "name": "Rose Quartz Heart", "blurb": "Hand-cut rose quartz heart — the stone of unconditional love, healing and gentle self-acceptance.", "price_inr": 599, "badge": None, "image_url": None, "accent": "from-[#F4C6D6] to-[#FBE4D5]", "in_stock": True, "order": 1},
+    {"id": "crystal-amethyst", "product_category_id": "crystals", "name": "Amethyst Cluster", "blurb": "Raw amethyst cluster for intuition, deep sleep, spiritual protection and meditation.", "price_inr": 1199, "badge": "Most Loved", "image_url": None, "accent": "from-[#9B8AC4] to-[#C8B6E2]", "in_stock": True, "order": 2},
+    {"id": "crystal-citrine", "product_category_id": "crystals", "name": "Citrine Tumble", "blurb": "Polished citrine tumble — the merchant's stone for abundance, joy and creative flow.", "price_inr": 449, "badge": None, "image_url": None, "accent": "from-[#EBB99A] to-[#F4C6D6]", "in_stock": True, "order": 3},
+    {"id": "crystal-set", "product_category_id": "crystals", "name": "Starter Crystal Set", "blurb": "Curated set of 4 essential crystals — rose quartz, amethyst, citrine, clear quartz. Perfect for beginners.", "price_inr": 1499, "badge": "Bestseller", "image_url": None, "accent": "from-[#C8B6E2] to-[#E6DDF1]", "in_stock": True, "order": 4},
+
+    # Oils (variants)
+    {"id": "oil-abundance", "product_category_id": "oils", "name": "Abundance Oil", "blurb": "Roll-on oil with citrine chips, basil, cinnamon — anoint candles, wallets, pulse points before manifestation.", "price_inr": 999, "badge": None, "image_url": None, "accent": "from-[#EBB99A] to-[#F4C6D6]", "in_stock": True, "order": 1},
+    {"id": "oil-love", "product_category_id": "oils", "name": "Love & Self-Love Oil", "blurb": "Rose, ylang-ylang and rose-quartz infused oil for opening the heart chakra.", "price_inr": 999, "badge": "New", "image_url": None, "accent": "from-[#F4C6D6] to-[#FBE4D5]", "in_stock": True, "order": 2},
+    {"id": "oil-clarity", "product_category_id": "oils", "name": "Clarity & Focus Oil", "blurb": "Peppermint, rosemary and clear quartz — anoint your temples before any reading or decision.", "price_inr": 899, "badge": None, "image_url": None, "accent": "from-[#C8B6E2] to-[#E6DDF1]", "in_stock": True, "order": 3},
 ]
 
 
 @app.on_event("startup")
 async def seed_db():
-    SEED_VERSION = "v7-orders"
+    SEED_VERSION = "v8-product-categories"
     meta = await db.app_meta.find_one({"_id": "seed"}, {"_id": 0}) or {}
     if meta.get("version") != SEED_VERSION:
         await db.services.delete_many({})
         await db.categories.delete_many({})
         await db.testimonials.delete_many({})
         await db.products.delete_many({})
+        await db.product_categories.delete_many({})
         await db.app_meta.update_one(
             {"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True
         )
@@ -458,10 +466,12 @@ async def seed_db():
     testimonials_count = await db.testimonials.count_documents({})
     if testimonials_count == 0:
         await db.testimonials.insert_many([dict(t) for t in SEED_TESTIMONIALS])
+    pc_count = await db.product_categories.count_documents({})
+    if pc_count == 0:
+        await db.product_categories.insert_many([dict(c) for c in SEED_PRODUCT_CATEGORIES])
     products_count = await db.products.count_documents({})
     if products_count == 0:
         await db.products.insert_many([dict(p) for p in SEED_PRODUCTS])
-    # Default settings
     settings_doc = await db.settings.find_one({"_id": "main"})
     if not settings_doc:
         await db.settings.insert_one({
@@ -472,10 +482,8 @@ async def seed_db():
             "open_days": [0, 1, 2, 3, 4, 5],
         })
     logger.info(
-        f"DB seeded {SEED_VERSION}. Cats: {await db.categories.count_documents({})}, "
-        f"Services: {await db.services.count_documents({})}, "
-        f"Products: {await db.products.count_documents({})}, "
-        f"Testimonials: {await db.testimonials.count_documents({})}"
+        f"DB seeded {SEED_VERSION}. ProductCats: {await db.product_categories.count_documents({})}, "
+        f"Products: {await db.products.count_documents({})}"
     )
 
 
@@ -999,6 +1007,15 @@ async def admin_delete_testimonial(tid: str, _admin: str = Depends(verify_admin)
 
 
 # ============== Products (Sacred Shop) ==============
+class ProductCategoryIn(BaseModel):
+    id: str
+    name: str
+    description: Optional[str] = ""
+    accent: Optional[str] = "from-[#C8B6E2] to-[#E6DDF1]"
+    icon: Optional[str] = "sparkles"
+    order: int = 100
+
+
 class ProductIn(BaseModel):
     id: str
     name: str
@@ -1010,10 +1027,78 @@ class ProductIn(BaseModel):
     shop_url: Optional[str] = None
     in_stock: bool = True
     order: int = 100
+    product_category_id: Optional[str] = None  # link to product_categories
 
 
 class ProductImageUpload(BaseModel):
-    image_data: str  # base64 data URI or raw base64 (we accept both)
+    image_data: str
+
+
+# ----- Public product category endpoints -----
+@api_router.get("/product-categories")
+async def public_list_product_categories():
+    """Return product categories with their nested products (for the Shop page)."""
+    cats = await db.product_categories.find({}, {"_id": 0}).sort("order", 1).to_list(length=50)
+    products = await db.products.find({}, {"_id": 0}).sort("order", 1).to_list(length=500)
+    by_cat: dict[str, list] = {None: []}
+    for p in products:
+        by_cat.setdefault(p.get("product_category_id"), []).append(p)
+    for c in cats:
+        c["products"] = by_cat.get(c["id"], [])
+    # Append uncategorised under a virtual bucket
+    uncategorised = by_cat.get(None, []) + [
+        p for k, lst in by_cat.items() if k and k not in {c["id"] for c in cats} for p in lst
+    ]
+    if uncategorised:
+        cats.append({
+            "id": "_uncategorised",
+            "name": "More",
+            "description": "",
+            "accent": "from-[#9B8AC4] to-[#C8B6E2]",
+            "icon": "sparkles",
+            "order": 9999,
+            "products": uncategorised,
+        })
+    return cats
+
+
+# ----- Admin product category CRUD -----
+@api_router.get("/admin/product-categories")
+async def admin_list_product_categories(_admin: str = Depends(verify_admin)):
+    docs = await db.product_categories.find({}, {"_id": 0}).sort("order", 1).to_list(length=100)
+    return docs
+
+
+@api_router.post("/admin/product-categories")
+async def admin_create_product_category(
+    payload: ProductCategoryIn, _admin: str = Depends(verify_admin)
+):
+    if await db.product_categories.find_one({"id": payload.id}):
+        raise HTTPException(status_code=409, detail="Category id already exists")
+    await db.product_categories.insert_one(payload.model_dump())
+    return {"success": True}
+
+
+@api_router.put("/admin/product-categories/{cid}")
+async def admin_update_product_category(
+    cid: str, payload: ProductCategoryIn, _admin: str = Depends(verify_admin)
+):
+    res = await db.product_categories.update_one(
+        {"id": cid}, {"$set": payload.model_dump()}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return {"success": True}
+
+
+@api_router.delete("/admin/product-categories/{cid}")
+async def admin_delete_product_category(cid: str, _admin: str = Depends(verify_admin)):
+    # Detach products instead of deleting them
+    await db.products.update_many(
+        {"product_category_id": cid}, {"$set": {"product_category_id": None}}
+    )
+    res = await db.product_categories.delete_one({"id": cid})
+    return {"success": True, "removed": res.deleted_count}
 
 
 @api_router.get("/products")
@@ -1056,14 +1141,11 @@ async def admin_upload_product_image(
     payload: ProductImageUpload,
     _admin: str = Depends(verify_admin),
 ):
-    """Accept a base64 data URI (e.g. 'data:image/png;base64,...') or raw base64 and store on the product."""
     data = (payload.image_data or "").strip()
     if not data:
         raise HTTPException(status_code=400, detail="image_data is empty")
-    # Normalise to a data: URI if just raw b64 was sent
     if not data.startswith("data:"):
         data = f"data:image/jpeg;base64,{data}"
-    # Sanity: limit ~6 MB raw payload
     if len(data) > 8_500_000:
         raise HTTPException(status_code=413, detail="Image too large (max ~6 MB). Compress first.")
     res = await db.products.update_one({"id": pid}, {"$set": {"image_url": data}})
