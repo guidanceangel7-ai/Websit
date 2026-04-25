@@ -133,50 +133,7 @@ export default function Hero({ onBookNow }) {
                 className="w-full h-full object-cover animate-float-slow"
               />
             </div>
-
-            {/* Floating core-quality chips — hidden on mobile (rendered as pills below) */}
-            <motion.div
-              animate={{ y: [0, -10, 0] }}
-              transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-              className="hidden lg:block absolute -left-12 top-6 glass-card rounded-2xl px-4 py-3 shadow-soft"
-            >
-              <div className="text-[10px] uppercase tracking-[0.22em] text-peach-deep font-bold">
-                ✦ Intuitive
-              </div>
-              <div className="font-display italic text-base text-ink-plum">
-                Soul-led Insight
-              </div>
-            </motion.div>
-
-            <motion.div
-              animate={{ y: [0, 10, 0] }}
-              transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-              className="hidden lg:block absolute -right-10 bottom-8 glass-card rounded-2xl px-4 py-3 shadow-soft"
-            >
-              <div className="text-[10px] uppercase tracking-[0.22em] text-peach-deep font-bold">
-                ✦ Authentic
-              </div>
-              <div className="font-display italic text-base text-ink-plum">
-                Heart-aligned Care
-              </div>
-            </motion.div>
           </motion.div>
-
-          {/* Mobile / tablet — render the same qualities below the medallion as pills */}
-          <div className="lg:hidden mt-7 flex flex-wrap items-center justify-center gap-2.5 px-2">
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/85 backdrop-blur border border-peach/30 px-3.5 py-1.5 text-[11px] tracking-[0.18em] uppercase text-ink-plum shadow-soft">
-              <span className="text-peach-deep">✦</span>
-              <span className="font-bold text-peach-deep">Intuitive</span>
-              <span className="text-ink-plum/40">·</span>
-              <span className="font-display italic">Soul-led</span>
-            </span>
-            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/85 backdrop-blur border border-peach/30 px-3.5 py-1.5 text-[11px] tracking-[0.18em] uppercase text-ink-plum shadow-soft">
-              <span className="text-peach-deep">✦</span>
-              <span className="font-bold text-peach-deep">Authentic</span>
-              <span className="text-ink-plum/40">·</span>
-              <span className="font-display italic">Heart-led</span>
-            </span>
-          </div>
         </div>
       </div>
     </section>
