@@ -230,24 +230,25 @@ SEED_SERVICES = [
 ]
 
 SEED_TESTIMONIALS = [
+    # WhatsApp & Exly feedback (real clients)
     {
         "id": "t1",
         "author": "Khushboo Sahrawat",
-        "content": "Honestly before speaking to you, I had few signs that lead me to you and I genuinely felt like I was guided to you. The next day onwards itself, I felt so much power coming back to me because you made me realise so many things about myself I was overlooking. The clarity you provided about my lessons and my purpose were absolutely the most helpful for me all my life. Beyond thankful for telling me about my grandfather being my spirit guide — I feel so so blessed. It reminded me of my strengths, of who I am.",
+        "content": "Beyond thankful for telling me about my grandfather being my spirit guide — there is not a single hour I don't think about him now. I feel so so blessed about taking the reading from you. It reminded me of my strengths, of who I am. It reminded me that I don't have to live in a lack mentality — literally my biggest blessing in present time. Thank you, thank you, thank you. ❤️",
         "rating": 5,
         "source": "Akashic · WhatsApp",
     },
     {
         "id": "t2",
         "author": "Khushali Manoj Bohra",
-        "content": "You had told that me and Aashish were soulmates in past life and we had very good married lives. Yesterday me and Aashish BOTH got the same dream — about being soulmates in the past life! You wereeee soooo accurate about it 😍",
+        "content": "You had told that me and Aashish were soulmates in past life. Yesterday me and Aashish BOTH got the same dream — about being soulmates in the past life! You wereeee soooo accurate about it 😍",
         "rating": 5,
         "source": "Tarot · WhatsApp",
     },
     {
         "id": "t3",
         "author": "Sakshi Sajwan",
-        "content": "It was an excellent experience of Akashic reading. I came to realise some important things and patterns which I need to break in this life. Thank you for helping and answering me that — which part I actually need to rectify in my life. Lots of wishes to you 💕",
+        "content": "It was an excellent experience of Akashic reading. I came to realise some important things and patterns I need to break in this life. Thank you for helping me understand which part I actually need to rectify. Lots of wishes 💕",
         "rating": 5,
         "source": "Akashic · 30-min",
     },
@@ -260,38 +261,144 @@ SEED_TESTIMONIALS = [
     },
     {
         "id": "t5",
-        "author": "Paridhi",
-        "content": "Jeni is an amazing person who has helped me a lot. Her readings are amazing. If you are facing any problems in life and need guidance she will help you and show you the right path to take. Thanks a lot for your guidance always.",
+        "author": "Ritu Gour",
+        "content": "If a person's last hope is also vanished, then you are the ray of hope so they will revive and survive with that. Excellent. Highly recommended. Thank you so much for your guidance 🙏❤️",
         "rating": 5,
-        "source": "google",
+        "source": "Exly Review",
     },
     {
         "id": "t6",
-        "author": "Bhagyshree",
-        "content": "The first ever reading I got done was from Jenny in 2020 and all that she said was absolutely to the point. She guided me through the situation I was stuck in and the timeline she gave was apt. I'm really happy to have met a genuine soul like Jenny.",
+        "author": "Pranoti Raut",
+        "content": "The accuracy of your readings and how you straight got into it — predicted things all by yourself and gave effective, realistic solutions while being practical about the situation.",
         "rating": 5,
-        "source": "google",
+        "source": "Exly Review",
     },
     {
         "id": "t7",
-        "author": "Parul",
-        "content": "She's incredible! I learnt tarot and pendulum dowsing from her. Her lessons are super insightful, and the reading she did for me was pretty spot-on. I'm really grateful for her guidance and the support she shares.",
+        "author": "Divyangi Arora",
+        "content": "I want to express my deepest gratitude for the incredible insights and guidance you've shared. Your ability to tap into the Akashic records has provided me profound clarity and understanding, helping me grow on my journey ❤️",
         "rating": 5,
-        "source": "google",
+        "source": "Akashic · Exly",
     },
     {
         "id": "t8",
-        "author": "Reena",
-        "content": "Jeni was extremely accurate in her readings. She did Tarot and Akashic readings for me and my brother. She helped me make decisions in my life where I was getting stuck. She is a wealth of knowledge and really helped guide me through a difficult time. I would highly recommend Jeni — she is gifted indeed!",
+        "author": "Nandita Singh",
+        "content": "Whatever I wanted to know was clearly answered. The experience was good 😊",
         "rating": 5,
-        "source": "google",
+        "source": "Exly Review",
+    },
+    {
+        "id": "t9",
+        "author": "Tyagi",
+        "content": "Very good experience. You told everything very well. Thank you for understanding everything so well.",
+        "rating": 5,
+        "source": "Exly Review",
+    },
+    {
+        "id": "t10",
+        "author": "Shristi",
+        "content": "I am so happy to get my Akashic reading done from Jeni — she is such a great soul. She has not just given me insights of my past life but also helped me with the tricks on how to heal them. She tapped on my current energies so well and told me things that only I am aware of. I'm glad I chose her.",
+        "rating": 5,
+        "source": "Akashic · Exly",
+    },
+    {
+        "id": "t11",
+        "author": "Sneha Vilas Kakad",
+        "content": "Thank you so much. Your whole session gave me positive energy. I just love the way you explained each and every thing about my past and present situation. I was getting stuck in some unwanted things but today when I was talking with you, all my things were getting clear.",
+        "rating": 5,
+        "source": "Exly Review",
+    },
+    {
+        "id": "t12",
+        "author": "Sejal Parmar",
+        "content": "Words can't express the feeling I felt during the session. The minute we started, I felt peaceful. Each detail was so accurate. So many things became clear, and most importantly the energy we shared during the session is incomparable. Thank you so much, universe.",
+        "rating": 5,
+        "source": "Exly Review",
+    },
+    {
+        "id": "t13",
+        "author": "Rutuja Bankar",
+        "content": "Thank you Jenika for wonderful session — so many things you told me have turned out to be right.",
+        "rating": 5,
+        "source": "Exly Review",
+    },
+    {
+        "id": "t14",
+        "author": "Nehha Verma",
+        "content": "Thank you Dear Jeni for an amazing Akashic session. You listened to all my concerns very patiently and answered them properly with solutions. You also helped me find the root cause of the pattern I am facing. Thank you from the bottom of my heart 🙏🏻",
+        "rating": 5,
+        "source": "Akashic · Exly",
+    },
+    {
+        "id": "t15",
+        "author": "Ritee Chanababa",
+        "content": "When I wasn't sure what to do, when I had a lot of changes going on, and when I needed a little guidance — every single time, you give me exactly what I need. Whether encouragement for the path I'm on, or slight course corrections to get me closer to my goal. God bless 😇",
+        "rating": 5,
+        "source": "WhatsApp",
+    },
+    {
+        "id": "t16",
+        "author": "Payal Punjabi",
+        "content": "You told me in Akashic reading that I will get a new opportunity — I got it and will be joining a school soon. Your push to start working made me join as a teacher in summer camp and they offered me to join their school. Thank you for helping me move out of the negativity around me.",
+        "rating": 5,
+        "source": "Akashic · WhatsApp",
+    },
+    {
+        "id": "t17",
+        "author": "Akshata Kulkarni",
+        "content": "Was processing the reading 😂 but a lot of it already resonates with me. Thanks a lot for the reading — when life gets chaotic, the reading brings a sense of comfort 😊",
+        "rating": 5,
+        "source": "WhatsApp",
+    },
+    {
+        "id": "t18",
+        "author": "Anikta Gupta",
+        "content": "I am so grateful that you were my guide in learning Akasha. The way you have made everything so easy to understand and access — you are the best teacher ever. You are my guiding light in my journey of spirituality. I feel blessed 🌻",
+        "rating": 5,
+        "source": "Mentorship",
+    },
+    {
+        "id": "t19",
+        "author": "Dr Norin Thakkar",
+        "content": "Thank you so much. You have been an excellent teacher and your explanation was crisp and to the point. We enjoyed and learned a lot. Thank you for all the self-reflective questions — they are so helpful. I'm glad you are our mentor ❤️",
+        "rating": 5,
+        "source": "Mentorship",
+    },
+    # Original Google reviews
+    {
+        "id": "t20",
+        "author": "Paridhi",
+        "content": "Jeni is an amazing person who has helped me a lot. Her readings are amazing. If you are facing any problems in life and need guidance she will help you and show you the right path to take. Thanks a lot for your guidance always.",
+        "rating": 5,
+        "source": "Google",
+    },
+    {
+        "id": "t21",
+        "author": "Bhagyshree",
+        "content": "The first ever reading I got done was from Jenny in 2020 and all that she said was absolutely to the point. She guided me through the situation I was stuck in and the timeline she gave was apt. I'm really happy to have met a genuine soul like Jenny.",
+        "rating": 5,
+        "source": "Google",
+    },
+    {
+        "id": "t22",
+        "author": "Parul",
+        "content": "She's incredible! I learnt tarot and pendulum dowsing from her. Her lessons are super insightful, and the reading she did for me was pretty spot-on. I'm really grateful for her guidance and the support she shares.",
+        "rating": 5,
+        "source": "Google",
+    },
+    {
+        "id": "t23",
+        "author": "Reena",
+        "content": "Jeni was extremely accurate in her readings. She did Tarot and Akashic readings for me and my brother. She helped me make decisions in my life where I was getting stuck. She is gifted indeed!",
+        "rating": 5,
+        "source": "Google",
     },
 ]
 
 
 @app.on_event("startup")
 async def seed_db():
-    SEED_VERSION = "v4-real-testimonials"
+    SEED_VERSION = "v5-more-testimonials"
     meta = await db.app_meta.find_one({"_id": "seed"}, {"_id": 0}) or {}
     if meta.get("version") != SEED_VERSION:
         await db.services.delete_many({})
