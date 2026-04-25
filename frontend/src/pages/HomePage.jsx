@@ -19,24 +19,29 @@ import { Toaster } from "../components/ui/sonner";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function HomePage() {
+  const [categories, setCategories] = useState([]);
   const [services, setServices] = useState([]);
   const [testimonials, setTestimonials] = useState([]);
   const [bookingOpen, setBookingOpen] = useState(false);
   const [initialService, setInitialService] = useState(null);
+  const [initialCategoryId, setInitialCategoryId] = useState(null);
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
-        const [s, t] = await Promise.all([
-          axios.get(`${API}/services`),
+        const [c, t] = await Promise.all([
+          axios.get(`${API}/categories`),
           axios.get(`${API}/testimonials`),
         ]);
         if (!alive) return;
-        setServices(s.data || []);
+        const cats = c.data || [];
+        setCategories(cats);
+        // Flatten services for booking dialog
+        const flat = cats.flatMap((cat) => cat.services || []);
+        setServices(flat);
         setTestimonials(t.data || []);
       } catch (e) {
-        // graceful – page still renders
         console.error(e);
       }
     })();
@@ -45,35 +50,38 @@ export default function HomePage() {
     };
   }, []);
 
-  const openBooking = (service = null) => {
+  const openBooking = (service = null, categoryId = null) => {
     setInitialService(service);
+    setInitialCategoryId(categoryId || (service ? service.category : null));
     setBookingOpen(true);
   };
 
   return (
     <div className="min-h-screen bg-ivory text-ink-plum font-body">
-      <Header onBookNow={() => openBooking(null)} />
+      <Header onBookNow={() => openBooking(null, null)} />
       <main>
-        <Hero onBookNow={() => openBooking(null)} />
+        <Hero onBookNow={() => openBooking(null, null)} />
         <HeroMarquee />
         <PressStrip />
         <About />
         <Gallery />
-        <HowItWorks onBookNow={() => openBooking(null)} />
+        <HowItWorks onBookNow={() => openBooking(null, null)} />
         <Services
-          services={services}
+          categories={categories}
           onSelect={(s) => openBooking(s)}
         />
         <Testimonials items={testimonials} />
         <InstagramGrid />
         <FAQ />
-        <Contact onBookNow={() => openBooking(null)} />
+        <Contact onBookNow={() => openBooking(null, null)} />
       </main>
       <Footer />
       <BookingDialog
         open={bookingOpen}
         onOpenChange={setBookingOpen}
         initialService={initialService}
+        initialCategoryId={initialCategoryId}
+        categories={categories}
         services={services}
       />
       <Toaster richColors position="top-center" />

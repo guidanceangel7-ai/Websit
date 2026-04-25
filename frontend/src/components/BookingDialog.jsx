@@ -17,11 +17,15 @@ import { format } from "date-fns";
 import {
   ArrowLeft,
   ArrowRight,
+  BookOpen,
+  CalendarHeart,
   Check,
   Clock,
   Headphones,
+  Heart,
   Loader2,
   Sparkles,
+  Stars,
 } from "lucide-react";
 import { BRAND } from "../lib/brand";
 
@@ -29,8 +33,39 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const RAZORPAY_KEY_ID =
   process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_PLACEHOLDER";
 
-const STEPS_LIVE = ["service", "schedule", "details", "pay"];
-const STEPS_VOICE = ["service", "details", "pay"];
+const CATEGORY_META = {
+  tarot_numerology: {
+    icon: Stars,
+    gradient: "from-[#6B5B95] via-[#9B8AC4] to-[#C8B6E2]",
+  },
+  akashic: {
+    icon: BookOpen,
+    gradient: "from-[#EBB99A] via-[#F4C6D6] to-[#C8B6E2]",
+  },
+  all_in_one: {
+    icon: Sparkles,
+    gradient: "from-[#9B8AC4] via-[#F4C6D6] to-[#EBB99A]",
+  },
+  month_ahead: {
+    icon: CalendarHeart,
+    gradient: "from-[#C8B6E2] via-[#E6DDF1] to-[#F4C6D6]",
+  },
+  healing: {
+    icon: Heart,
+    gradient: "from-[#F4C6D6] via-[#EBB99A] to-[#FBE4D5]",
+  },
+};
+
+const STEPS_LIVE = ["category", "service", "schedule", "details", "pay"];
+const STEPS_VOICE = ["category", "service", "details", "pay"];
+
+const STEP_LABELS = {
+  category: "Choose a Category",
+  service: "Choose a Variant",
+  schedule: "Pick a Date & Time",
+  details: "Your Details",
+  pay: "Confirm & Pay",
+};
 
 function Stepper({ current, steps }) {
   return (
@@ -63,9 +98,14 @@ export default function BookingDialog({
   open,
   onOpenChange,
   initialService,
+  initialCategoryId,
+  categories,
   services,
 }) {
   const [selectedService, setSelectedService] = useState(initialService || null);
+  const [selectedCategoryId, setSelectedCategoryId] = useState(
+    initialCategoryId || initialService?.category || null
+  );
   const isVoiceNote = !!selectedService?.is_voice_note;
   const STEPS = isVoiceNote ? STEPS_VOICE : STEPS_LIVE;
 
@@ -92,7 +132,19 @@ export default function BookingDialog({
   useEffect(() => {
     if (open) {
       setSelectedService(initialService || null);
-      setStep(initialService ? 1 : 0);
+      setSelectedCategoryId(
+        initialCategoryId || initialService?.category || null
+      );
+      // initialService → jump to schedule (live) / details (voice note)
+      // initialCategoryId → jump to service step
+      // otherwise start at category
+      if (initialService) {
+        setStep(2); // service was selected, go to schedule (live) or details (voice handled by STEPS array)
+      } else if (initialCategoryId) {
+        setStep(1);
+      } else {
+        setStep(0);
+      }
       setDate(null);
       setSlot(null);
       setSlots([]);
@@ -112,11 +164,11 @@ export default function BookingDialog({
         .then((r) => setBlockedDates(r.data || []))
         .catch(() => setBlockedDates([]));
     }
-  }, [open, initialService]);
+  }, [open, initialService, initialCategoryId]);
 
-  // When service selection changes, reset to step 0 if needed
+  // When service is set without a step jump, advance properly
   useEffect(() => {
-    if (selectedService && step === 0) setStep(1);
+    // No-op: handled by direct step setters at click time
   }, [selectedService]); // eslint-disable-line
 
   // Fetch slots when date is picked
@@ -143,16 +195,12 @@ export default function BookingDialog({
 
   const stepLabel = useMemo(() => {
     const cur = STEPS[step];
-    return {
-      service: "Choose a Service",
-      schedule: "Pick a Date & Time",
-      details: "Your Details",
-      pay: "Confirm & Pay",
-    }[cur];
+    return STEP_LABELS[cur] || "Begin Your Journey";
   }, [step, STEPS]);
 
   const canNext = useMemo(() => {
     const cur = STEPS[step];
+    if (cur === "category") return !!selectedCategoryId;
     if (cur === "service") return !!selectedService;
     if (cur === "schedule") return !!date && !!slot;
     if (cur === "details") {
@@ -163,7 +211,7 @@ export default function BookingDialog({
       return ok;
     }
     return true;
-  }, [step, STEPS, selectedService, date, slot, form]);
+  }, [step, STEPS, selectedCategoryId, selectedService, date, slot, form]);
 
   const goNext = () => {
     if (!canNext) return;
@@ -309,15 +357,64 @@ export default function BookingDialog({
         </div>
 
         <div className="px-6 sm:px-8 py-7 max-h-[60vh] overflow-y-auto bg-[#FFFFFF]">
+          {cur === "category" && (
+            <div data-testid="step-category" className="grid sm:grid-cols-2 gap-3">
+              {categories?.map((c) => {
+                const meta = CATEGORY_META[c.id] || CATEGORY_META.tarot_numerology;
+                const Icon = meta.icon;
+                const minPrice = c.services?.length
+                  ? Math.min(...c.services.map((s) => s.price_inr))
+                  : 0;
+                return (
+                  <button
+                    key={c.id}
+                    data-testid={`pick-category-${c.id}`}
+                    onClick={() => {
+                      setSelectedCategoryId(c.id);
+                      setStep(1);
+                    }}
+                    className="group text-left rounded-2xl border-2 border-[#EBB99A]/30 hover:border-[#6B5B95] hover:-translate-y-0.5 transition shadow-soft hover:shadow-[0_12px_28px_-8px_rgba(107,91,149,0.3)] overflow-hidden"
+                  >
+                    <div className={`bg-gradient-to-br ${meta.gradient} px-5 py-4 relative`}>
+                      <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-white/15 blur-2xl pointer-events-none" />
+                      <div className="relative flex items-start justify-between gap-3">
+                        <div className="w-10 h-10 rounded-xl bg-white/30 backdrop-blur flex items-center justify-center text-white">
+                          <Icon size={18} strokeWidth={1.6} />
+                        </div>
+                        <span className="text-[10px] tracking-[0.2em] uppercase bg-white/30 text-white backdrop-blur px-2.5 py-1 rounded-full font-bold">
+                          From ₹{minPrice.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                      <div className="font-display text-base sm:text-lg text-white mt-3 leading-tight drop-shadow-[0_1px_4px_rgba(0,0,0,0.2)]">
+                        {c.name}
+                      </div>
+                    </div>
+                    <div className="bg-white px-5 py-3">
+                      <p className="text-xs text-[#3A2E5D]/70 leading-relaxed line-clamp-2">
+                        {c.tagline || c.description}
+                      </p>
+                      <div className="mt-2 text-[10px] tracking-[0.2em] uppercase text-[#9B8AC4] inline-flex items-center gap-1">
+                        {c.services?.length || 0} variants <ArrowRight size={11} />
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
           {cur === "service" && (
             <div data-testid="step-service" className="grid gap-3">
-              {services?.map((s) => (
+              {(selectedCategoryId
+                ? (services || []).filter((s) => s.category === selectedCategoryId)
+                : services
+              )?.map((s) => (
                 <button
                   key={s.id}
                   data-testid={`pick-service-${s.id}`}
                   onClick={() => {
                     setSelectedService(s);
-                    setStep(1);
+                    setStep(2);
                   }}
                   className="group text-left rounded-2xl border-2 border-[#EBB99A]/30 bg-gradient-to-r from-[#FBF4E8] to-white px-5 py-4 hover:border-[#6B5B95] hover:shadow-[0_8px_24px_-8px_rgba(107,91,149,0.3)] hover:-translate-y-0.5 transition flex items-center justify-between gap-4"
                 >
@@ -327,7 +424,7 @@ export default function BookingDialog({
                     </div>
                     <div>
                       <div className="text-[10px] uppercase tracking-[0.22em] text-[#D9A382] font-bold">
-                        {s.is_voice_note ? "Voice Note" : `${s.duration_minutes} min`}
+                        {s.is_voice_note ? "Voice Note · 48 hr delivery" : `${s.duration_minutes} min · Live call`}
                       </div>
                       <div className="font-display text-base text-[#3A2E5D] mt-0.5">
                         {s.name}

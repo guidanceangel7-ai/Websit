@@ -50,12 +50,14 @@ api_router = APIRouter(prefix="/api")
 class Service(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
-    category: str  # tarot_numerology | akashic | voice_note
+    category: str  # tarot_numerology | akashic | all_in_one | month_ahead | healing
     name: str
     duration_minutes: Optional[int] = None
     price_inr: int
     description: str
     is_voice_note: bool = False
+    variant: Optional[str] = None  # call | voice_note | program
+    program_days: Optional[int] = None
 
 
 class BookingCreate(BaseModel):
@@ -127,25 +129,96 @@ class Testimonial(BaseModel):
 
 
 # ============== Seed Data ==============
+SEED_CATEGORIES = [
+    {
+        "id": "tarot_numerology",
+        "name": "Tarot + Numerology Reading",
+        "tagline": "Clarity through cards & numbers",
+        "description": "A blend of intuitive tarot insights and ancient numerology — clarity, timelines and direction on love, career and life choices.",
+        "icon": "stars",
+        "order": 1,
+    },
+    {
+        "id": "akashic",
+        "name": "Akashic Records Reading",
+        "tagline": "Look through your soul's library",
+        "description": "Access the records of your eternal life to view long-ago past patterns, present soul lessons and your potential future. Discover karmic threads still influencing you today.",
+        "icon": "book",
+        "order": 2,
+    },
+    {
+        "id": "all_in_one",
+        "name": "All In One Mega Reading",
+        "tagline": "The complete soul deep-dive",
+        "description": "Overall reading covering your patterns, childhood, behaviour, strengths and weaknesses — a complete in-depth analysis of who you are and your highest potential. Includes Tarot + Numerology + Akashic.",
+        "icon": "sparkles",
+        "order": 3,
+    },
+    {
+        "id": "month_ahead",
+        "name": "Month Ahead Reading",
+        "tagline": "Your timeline, foretold",
+        "description": "A forward-looking guidance reading covering the month, quarter or year ahead. Combines tarot, numerology and Akashic insights into a clear timeline forecast.",
+        "icon": "calendar",
+        "order": 4,
+    },
+    {
+        "id": "healing",
+        "name": "Intention Healing / Cleansing",
+        "tagline": "Reiki + Merlin healing journeys",
+        "description": "Daily reiki and merlin healing sessions over 1 week or 21 days. Personalised music to listen to at scheduled time daily, with feedback discussion via WhatsApp voice notes.",
+        "icon": "heart",
+        "order": 5,
+    },
+]
+
 SEED_SERVICES = [
-    {"id": "tn-15", "category": "tarot_numerology", "name": "Tarot + Numerology Reading", "duration_minutes": 15, "price_inr": 2100,
-     "description": "A focused 15-minute session blending tarot insights with numerology guidance for one specific question.", "is_voice_note": False},
-    {"id": "tn-30", "category": "tarot_numerology", "name": "Tarot + Numerology Reading", "duration_minutes": 30, "price_inr": 4000,
-     "description": "A 30-minute reading exploring multiple aspects of your life with deeper numerology layers.", "is_voice_note": False},
-    {"id": "tn-45", "category": "tarot_numerology", "name": "Tarot + Numerology Reading", "duration_minutes": 45, "price_inr": 6500,
-     "description": "An in-depth 45-minute consultation covering relationships, career, finances and life path.", "is_voice_note": False},
-    {"id": "ak-30", "category": "akashic", "name": "Akashic Record Reading", "duration_minutes": 30, "price_inr": 4000,
-     "description": "Access your soul records for clarity on past patterns and your soul's current chapter.", "is_voice_note": False},
-    {"id": "ak-45", "category": "akashic", "name": "Akashic Record Reading", "duration_minutes": 45, "price_inr": 5500,
-     "description": "An expanded Akashic session diving into karmic threads, relationships and life lessons.", "is_voice_note": False},
-    {"id": "ak-60", "category": "akashic", "name": "Akashic Record Reading", "duration_minutes": 60, "price_inr": 7500,
-     "description": "A complete one-hour Akashic journey – soul gifts, blocks, healings and forward path.", "is_voice_note": False},
-    {"id": "vn-question", "category": "voice_note", "name": "Question Tarot + Numerology", "duration_minutes": None, "price_inr": 550,
-     "description": "Ask one specific question – receive a recorded voice note answer within 48 hours.", "is_voice_note": True},
-    {"id": "vn-tarotscope", "category": "voice_note", "name": "Tarotscope", "duration_minutes": None, "price_inr": 1500,
-     "description": "Personalised yearly tarotscope delivered as a voice note – your year ahead at a glance.", "is_voice_note": True},
-    {"id": "vn-numerology-report", "category": "voice_note", "name": "Personal Numerology Report", "duration_minutes": None, "price_inr": 2121,
-     "description": "Detailed personal numerology report with life path, soul number and yearly forecast.", "is_voice_note": True},
+    # Tarot + Numerology — Calls
+    {"id": "tn-15-call", "category": "tarot_numerology", "name": "15-min Call Reading", "duration_minutes": 15, "price_inr": 2100,
+     "description": "A focused 15-minute call session blending tarot insights with numerology guidance for one specific question.", "is_voice_note": False, "variant": "call"},
+    {"id": "tn-30-call", "category": "tarot_numerology", "name": "30-min Call Reading", "duration_minutes": 30, "price_inr": 4000,
+     "description": "A 30-minute call exploring multiple aspects of your life with deeper numerology layers.", "is_voice_note": False, "variant": "call"},
+    {"id": "tn-45-call", "category": "tarot_numerology", "name": "45-min Call Reading", "duration_minutes": 45, "price_inr": 6500,
+     "description": "An in-depth 45-minute call covering relationships, career, finances and life path.", "is_voice_note": False, "variant": "call"},
+    # Tarot + Numerology — Voice Note Question Readings
+    {"id": "tn-q1", "category": "tarot_numerology", "name": "1 Question Reading", "duration_minutes": None, "price_inr": 550,
+     "description": "Ask one specific question — receive a recorded voice note answer within 48 hours.", "is_voice_note": True, "variant": "voice_note"},
+    {"id": "tn-q2", "category": "tarot_numerology", "name": "2 Questions Reading", "duration_minutes": None, "price_inr": 1000,
+     "description": "Two questions answered as a recorded voice note within 48 hours.", "is_voice_note": True, "variant": "voice_note"},
+    {"id": "tn-q3", "category": "tarot_numerology", "name": "3 Questions Reading", "duration_minutes": None, "price_inr": 1500,
+     "description": "Three questions answered as a recorded voice note within 48 hours.", "is_voice_note": True, "variant": "voice_note"},
+    {"id": "tn-q5", "category": "tarot_numerology", "name": "5 Questions Reading", "duration_minutes": None, "price_inr": 2200,
+     "description": "Five questions answered as a recorded voice note within 48 hours.", "is_voice_note": True, "variant": "voice_note"},
+
+    # Akashic — Calls only
+    {"id": "ak-30", "category": "akashic", "name": "30-min Call Reading", "duration_minutes": 30, "price_inr": 4000,
+     "description": "Access your soul records for clarity on past patterns and your soul's current chapter.", "is_voice_note": False, "variant": "call"},
+    {"id": "ak-45", "category": "akashic", "name": "45-min Call Reading", "duration_minutes": 45, "price_inr": 5500,
+     "description": "An expanded Akashic session diving into karmic threads, relationships and life lessons.", "is_voice_note": False, "variant": "call"},
+    {"id": "ak-60", "category": "akashic", "name": "60-min Call Reading", "duration_minutes": 60, "price_inr": 7500,
+     "description": "A complete one-hour Akashic journey – soul gifts, blocks, healings and forward path.", "is_voice_note": False, "variant": "call"},
+
+    # All In One Mega
+    {"id": "aio-60", "category": "all_in_one", "name": "1 Hour Mega Reading", "duration_minutes": 60, "price_inr": 10500,
+     "description": "Complete soul deep-dive — Tarot + Numerology + Akashic combined. Your patterns, childhood, behaviour, strengths and best potential future, all in one hour.", "is_voice_note": False, "variant": "call"},
+
+    # Month Ahead — voice note delivered
+    {"id": "ma-1m", "category": "month_ahead", "name": "1 Month Guidance", "duration_minutes": None, "price_inr": 1500,
+     "description": "Your month-ahead forecast — combining tarot + numerology + Akashic insights, delivered as a recorded voice note.", "is_voice_note": True, "variant": "voice_note"},
+    {"id": "ma-3m", "category": "month_ahead", "name": "3 Month Guidance", "duration_minutes": None, "price_inr": 3000,
+     "description": "Quarterly forecast covering the next 3 months across love, career, finances and growth.", "is_voice_note": True, "variant": "voice_note"},
+    {"id": "ma-1y", "category": "month_ahead", "name": "1 Year Guidance", "duration_minutes": None, "price_inr": 5000,
+     "description": "Your year-ahead deep forecast — month by month — delivered as a recorded voice note.", "is_voice_note": True, "variant": "voice_note"},
+
+    # Intention Healing / Cleansing — multi-day programs (require start date+slot)
+    {"id": "heal-20-7", "category": "healing", "name": "20 Mins × 1 Week", "duration_minutes": 20, "price_inr": 4100,
+     "description": "20-minute daily healing session for 7 days. Reiki + merlin healing with personalised music. Daily feedback via WhatsApp.", "is_voice_note": False, "variant": "program", "program_days": 7},
+    {"id": "heal-20-21", "category": "healing", "name": "20 Mins × 21 Days", "duration_minutes": 20, "price_inr": 6100,
+     "description": "20-minute daily healing session for 21 days — a deeper transformation cycle.", "is_voice_note": False, "variant": "program", "program_days": 21},
+    {"id": "heal-30-7", "category": "healing", "name": "30 Mins × 1 Week", "duration_minutes": 30, "price_inr": 5100,
+     "description": "30-minute daily healing session for 7 days. Reiki + merlin healing with personalised music.", "is_voice_note": False, "variant": "program", "program_days": 7},
+    {"id": "heal-30-21", "category": "healing", "name": "30 Mins × 21 Days", "duration_minutes": 30, "price_inr": 7100,
+     "description": "30-minute daily healing session for 21 days — our deepest cleansing program.", "is_voice_note": False, "variant": "program", "program_days": 21},
 ]
 
 SEED_TESTIMONIALS = [
@@ -162,13 +235,28 @@ SEED_TESTIMONIALS = [
 
 @app.on_event("startup")
 async def seed_db():
+    SEED_VERSION = "v2-categories"
+    meta = await db.app_meta.find_one({"_id": "seed"}, {"_id": 0}) or {}
+    if meta.get("version") != SEED_VERSION:
+        await db.services.delete_many({})
+        await db.categories.delete_many({})
+        await db.app_meta.update_one(
+            {"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True
+        )
     services_count = await db.services.count_documents({})
     if services_count == 0:
         await db.services.insert_many([dict(s) for s in SEED_SERVICES])
+    categories_count = await db.categories.count_documents({})
+    if categories_count == 0:
+        await db.categories.insert_many([dict(c) for c in SEED_CATEGORIES])
     testimonials_count = await db.testimonials.count_documents({})
     if testimonials_count == 0:
         await db.testimonials.insert_many([dict(t) for t in SEED_TESTIMONIALS])
-    logger.info(f"DB seeded. Services: {await db.services.count_documents({})}, Testimonials: {await db.testimonials.count_documents({})}")
+    logger.info(
+        f"DB seeded {SEED_VERSION}. Cats: {await db.categories.count_documents({})}, "
+        f"Services: {await db.services.count_documents({})}, "
+        f"Testimonials: {await db.testimonials.count_documents({})}"
+    )
 
 
 # ============== Helpers ==============
@@ -197,8 +285,21 @@ async def root():
 
 @api_router.get("/services", response_model=List[Service])
 async def list_services():
-    docs = await db.services.find({}, {"_id": 0}).to_list(length=100)
+    docs = await db.services.find({}, {"_id": 0}).to_list(length=200)
     return docs
+
+
+@api_router.get("/categories")
+async def list_categories():
+    """Return categories with their nested services."""
+    cats = await db.categories.find({}, {"_id": 0}).sort("order", 1).to_list(length=20)
+    services = await db.services.find({}, {"_id": 0}).to_list(length=200)
+    by_cat: dict[str, list] = {}
+    for s in services:
+        by_cat.setdefault(s["category"], []).append(s)
+    for c in cats:
+        c["services"] = by_cat.get(c["id"], [])
+    return cats
 
 
 @api_router.get("/testimonials", response_model=List[Testimonial])
