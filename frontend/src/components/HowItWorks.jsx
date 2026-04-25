@@ -52,6 +52,7 @@ export default function HowItWorks({ onBookNow }) {
           {STEPS.map((s, i) => (
             <motion.div
               key={s.title}
+              data-testid={`how-step-${i + 1}`}
               initial={{ opacity: 0, y: 14 }}
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-80px" }}
