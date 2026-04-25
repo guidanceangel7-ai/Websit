@@ -46,12 +46,12 @@ export default function Gallery() {
                   loading="lazy"
                 />
               </div>
-              <div className="absolute inset-0 bg-gradient-to-t from-ink-plum/70 via-ink-plum/10 to-transparent opacity-90" />
+              <div className="absolute inset-0 bg-gradient-to-t from-ink-plum/85 via-ink-plum/30 to-transparent opacity-90" />
               <figcaption className="absolute bottom-0 inset-x-0 p-5 text-ivory">
-                <div className="text-[10px] tracking-[0.3em] uppercase text-peach">
+                <div className="text-[10px] tracking-[0.3em] uppercase text-peach drop-shadow-[0_1px_4px_rgba(0,0,0,0.4)]">
                   {g.label}
                 </div>
-                <div className="font-display text-lg sm:text-xl mt-1 leading-snug">
+                <div className="font-display text-lg sm:text-xl mt-1 leading-snug drop-shadow-[0_1px_6px_rgba(0,0,0,0.5)]">
                   {g.caption}
                 </div>
               </figcaption>

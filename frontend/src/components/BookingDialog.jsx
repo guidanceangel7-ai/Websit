@@ -91,9 +91,7 @@ export default function BookingDialog({
   useEffect(() => {
     if (open) {
       setSelectedService(initialService || null);
-      setStep(initialService ? (initialService.is_voice_note ? 0 : 0) : 0);
-      // If a service is preselected, jump to next step
-      if (initialService) setStep(1);
+      setStep(initialService ? 1 : 0);
       setDate(null);
       setSlot(null);
       setSlots([]);
