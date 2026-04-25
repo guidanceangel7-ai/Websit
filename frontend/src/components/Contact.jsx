@@ -68,7 +68,7 @@ export default function Contact({ onBookNow }) {
                 {
                   icon: Instagram,
                   label: "Instagram",
-                  value: "@guidance_angel_jenika",
+                  value: "@guidance_angel7",
                   href: BRAND.instagram,
                   testid: "contact-instagram",
                 },

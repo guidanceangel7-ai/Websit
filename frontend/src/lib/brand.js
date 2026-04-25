@@ -11,7 +11,8 @@ export const BRAND = {
   whatsappPretty: "+91 83201 35858",
   phone: "+918320135858",
   email: "guidanceangel7@gmail.com",
-  instagram: "https://www.instagram.com/guidance_angel_jenika/",
+  instagram: "https://www.instagram.com/guidance_angel7/",
+  instagramHandle: "@guidance_angel7",
   legacySite: "https://www.guidanceangel7.com",
   exlySite: "https://guidanceangel7.exlyapp.com",
   logoRound:

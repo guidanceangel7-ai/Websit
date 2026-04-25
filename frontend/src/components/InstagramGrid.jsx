@@ -143,7 +143,7 @@ export default function InstagramGrid() {
             rel="noreferrer"
             className="self-start sm:self-end inline-flex items-center gap-2 bg-white border border-peach/40 text-lavender-deep rounded-full px-6 py-3 text-sm font-medium hover:bg-peach/10 transition"
           >
-            <Instagram size={16} /> @guidance_angel_jenika
+            <Instagram size={16} /> @guidance_angel7
           </a>
         </div>
 
