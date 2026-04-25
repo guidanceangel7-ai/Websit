@@ -63,7 +63,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-ivory text-ink-plum font-body">
       <SpecialOfferBanner />
       <Header onBookNow={() => openBooking(null, null)} />
-      <main>
+      <main style={{ paddingTop: "var(--banner-h, 0px)" }}>
         <Hero onBookNow={() => openBooking(null, null)} />
         <HeroMarquee />
         <PressStrip />

@@ -49,13 +49,24 @@ export default function SpecialOfferBanner() {
     return () => clearInterval(id);
   }, [promos.length]);
 
+  // Reserve vertical space at the top of the document so the fixed banner
+  // never overlaps the header / page content.
+  useEffect(() => {
+    const root = document.documentElement;
+    const showing = promos.length > 0 && !dismissed;
+    root.style.setProperty("--banner-h", showing ? "48px" : "0px");
+    return () => {
+      root.style.setProperty("--banner-h", "0px");
+    };
+  }, [promos.length, dismissed]);
+
   if (!promos.length || dismissed) return null;
   const cur = promos[idx % promos.length];
 
   return (
     <div
       data-testid="special-offer-banner"
-      className="relative z-[60] bg-gradient-to-r from-[#6B5B95] via-[#9B8AC4] to-[#6B5B95] text-ivory shadow-[0_4px_18px_rgba(58,46,93,0.25)]"
+      className="fixed top-0 inset-x-0 z-[60] bg-gradient-to-r from-[#6B5B95] via-[#9B8AC4] to-[#6B5B95] text-ivory shadow-[0_4px_18px_rgba(58,46,93,0.25)]"
     >
       <div className="relative max-w-7xl mx-auto px-5 sm:px-8 h-12 sm:h-12 flex items-center gap-3">
         <Sparkles size={14} className="text-[#EBB99A] shrink-0 hidden sm:block" />

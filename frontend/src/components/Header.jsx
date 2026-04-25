@@ -26,7 +26,8 @@ export default function Header({ onBookNow }) {
   return (
     <header
       data-testid="site-header"
-      className={`fixed top-0 inset-x-0 z-50 transition-all duration-500 ${
+      style={{ top: "var(--banner-h, 0px)" }}
+      className={`fixed inset-x-0 z-50 transition-[top,background,box-shadow,backdrop-filter] duration-500 ${
         scrolled
           ? "bg-ivory/85 backdrop-blur-xl border-b border-peach/25 shadow-soft"
           : "bg-transparent"
