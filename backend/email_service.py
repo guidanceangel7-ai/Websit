@@ -1,7 +1,13 @@
-"""Email service powered by Resend."""
+"""Email service — Gmail SMTP primary, Resend fallback."""
 import asyncio
 import logging
 import os
+import smtplib
+import ssl
+import uuid
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.utils import formataddr
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +27,72 @@ def _cfg(key: str, default: str = "") -> str:
 
 if _cfg("RESEND_API_KEY"):
     resend.api_key = _cfg("RESEND_API_KEY")
+
+
+def _smtp_configured() -> bool:
+    return bool(_cfg("SMTP_HOST") and _cfg("SMTP_USER") and _cfg("SMTP_PASSWORD"))
+
+
+def _smtp_send_sync(to_addr: str, subject: str, html: str, reply_to: str = "") -> Optional[str]:
+    """Synchronous SMTP send — wrapped via asyncio.to_thread by the dispatcher."""
+    host = _cfg("SMTP_HOST")
+    port = int(_cfg("SMTP_PORT", "587"))
+    user = _cfg("SMTP_USER")
+    password = _cfg("SMTP_PASSWORD", "").replace(" ", "")
+    from_name = _cfg("SMTP_FROM_NAME", "Guidance Angel")
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = formataddr((from_name, user))
+    msg["To"] = to_addr
+    if reply_to:
+        msg["Reply-To"] = reply_to
+    # Generate a stable Message-ID we can return as the "id"
+    mid = f"<{uuid.uuid4().hex}@guidanceangel7.com>"
+    msg["Message-ID"] = mid
+    # Plain-text fallback for clients that block HTML
+    msg.attach(MIMEText("Your message is available in HTML format.", "plain"))
+    msg.attach(MIMEText(html, "html"))
+
+    ctx = ssl.create_default_context()
+    with smtplib.SMTP(host, port, timeout=15) as server:
+        server.ehlo()
+        server.starttls(context=ctx)
+        server.ehlo()
+        server.login(user, password)
+        server.sendmail(user, [to_addr], msg.as_string())
+    return mid
+
+
+async def _dispatch_email(
+    to_addr: str, subject: str, html: str, reply_to: str = ""
+) -> Optional[str]:
+    """Try Gmail SMTP first; fall back to Resend if SMTP fails or is missing."""
+    # ---- 1. Gmail SMTP ----
+    if _smtp_configured() and not _cfg("SMTP_USER", "").startswith("PLACEHOLDER"):
+        try:
+            mid = await asyncio.to_thread(_smtp_send_sync, to_addr, subject, html, reply_to)
+            logger.info(f"SMTP sent to={to_addr} id={mid}")
+            return mid
+        except Exception as e:
+            logger.warning(f"SMTP send failed (will try Resend): {e}")
+
+    # ---- 2. Resend fallback ----
+    if not _cfg("RESEND_API_KEY"):
+        logger.info("RESEND_API_KEY not set — email skipped")
+        return None
+    sender = _cfg("RESEND_FROM_EMAIL", "Guidance Angel <onboarding@resend.dev>")
+    try:
+        params = {"from": sender, "to": [to_addr], "subject": subject, "html": html}
+        if reply_to:
+            params["reply_to"] = reply_to
+        result = await asyncio.to_thread(resend.Emails.send, params)
+        eid = result.get("id") if isinstance(result, dict) else None
+        logger.info(f"Resend sent to={to_addr} id={eid}")
+        return eid
+    except Exception as e:
+        logger.error(f"Both SMTP and Resend failed for to={to_addr}: {e}")
+        return None
 
 
 def _booking_html(booking: dict) -> str:
@@ -140,54 +212,34 @@ def _booking_html(booking: dict) -> str:
 
 
 async def send_booking_confirmation(booking: dict) -> Optional[str]:
-    """Send confirmation email to the customer. Returns Resend email id or None.
+    """Send confirmation email to the customer. Returns mail id or None.
 
     Fails gracefully — never raises so booking flow is unaffected.
     """
-    api_key = _cfg("RESEND_API_KEY")
-    sender = _cfg(
-        "RESEND_FROM_EMAIL", "Guidance Angel <onboarding@resend.dev>"
-    )
     reply_to = _cfg("RESEND_REPLY_TO")
     admin_email = _cfg("ADMIN_NOTIFICATION_EMAIL")
-    if not api_key:
-        logger.info("RESEND_API_KEY not set — skipping email send")
-        return None
-    resend.api_key = api_key  # ensure SDK is configured at runtime
     to_email = booking.get("customer_email")
     if not to_email:
         return None
-    try:
-        params = {
-            "from": sender,
-            "to": [to_email],
-            "subject": f"✦ Your reading is confirmed — {booking.get('service_name', 'Guidance Angel')}",
-            "html": _booking_html(booking),
-        }
-        if reply_to:
-            params["reply_to"] = reply_to
-        result = await asyncio.to_thread(resend.Emails.send, params)
-        email_id = result.get("id") if isinstance(result, dict) else None
-        logger.info(f"Resend email sent id={email_id} to={to_email}")
+    email_id = await _dispatch_email(
+        to_addr=to_email,
+        subject=f"✦ Your reading is confirmed — {booking.get('service_name', 'Guidance Angel')}",
+        html=_booking_html(booking),
+        reply_to=reply_to,
+    )
 
-        # Also notify admin (Jenika)
-        if admin_email and admin_email.lower() != to_email.lower():
-            admin_params = {
-                "from": sender,
-                "to": [admin_email],
-                "subject": f"New booking: {booking.get('customer_name')} — {booking.get('service_name')}",
-                "html": _admin_html(booking),
-            }
-            if reply_to:
-                admin_params["reply_to"] = reply_to
-            try:
-                await asyncio.to_thread(resend.Emails.send, admin_params)
-            except Exception as e:
-                logger.warning(f"Admin email failed: {e}")
-        return email_id
-    except Exception as e:
-        logger.error(f"Failed to send booking email to {to_email}: {e}")
-        return None
+    # Also notify admin (Jenika)
+    if admin_email and admin_email.lower() != to_email.lower():
+        try:
+            await _dispatch_email(
+                to_addr=admin_email,
+                subject=f"New booking: {booking.get('customer_name')} — {booking.get('service_name')}",
+                html=_admin_html(booking),
+                reply_to=reply_to,
+            )
+        except Exception as e:
+            logger.warning(f"Admin email failed: {e}")
+    return email_id
 
 
 def _admin_html(booking: dict) -> str:
@@ -270,47 +322,28 @@ def _order_html(order: dict) -> str:
 
 async def send_order_confirmation(order: dict) -> Optional[str]:
     """Send order confirmation email to customer + admin notification."""
-    api_key = _cfg("RESEND_API_KEY")
-    sender = _cfg("RESEND_FROM_EMAIL", "Guidance Angel <onboarding@resend.dev>")
     reply_to = _cfg("RESEND_REPLY_TO")
     admin_email = _cfg("ADMIN_NOTIFICATION_EMAIL")
-    if not api_key:
-        logger.info("RESEND_API_KEY not set — skipping order email")
-        return None
-    resend.api_key = api_key
     to_email = order.get("customer_email")
     if not to_email:
         return None
-    try:
-        params = {
-            "from": sender,
-            "to": [to_email],
-            "subject": f"✦ Order confirmed · #{(order.get('id') or '')[:8].upper()} — Guidance Angel Sacred Shop",
-            "html": _order_html(order),
-        }
-        if reply_to:
-            params["reply_to"] = reply_to
-        result = await asyncio.to_thread(resend.Emails.send, params)
-        email_id = result.get("id") if isinstance(result, dict) else None
-        logger.info(f"Resend ORDER email sent id={email_id} to={to_email}")
-        if admin_email and admin_email.lower() != to_email.lower():
-            try:
-                await asyncio.to_thread(
-                    resend.Emails.send,
-                    {
-                        "from": sender,
-                        "to": [admin_email],
-                        "subject": f"🛍️ New order: {order.get('customer_name')} · ₹{int(order.get('total_inr',0)):,}",
-                        "html": _order_html(order),
-                        **({"reply_to": reply_to} if reply_to else {}),
-                    },
-                )
-            except Exception as e:
-                logger.warning(f"Admin order email failed: {e}")
-        return email_id
-    except Exception as e:
-        logger.error(f"Failed to send order email to {to_email}: {e}")
-        return None
+    email_id = await _dispatch_email(
+        to_addr=to_email,
+        subject=f"✦ Order confirmed · #{(order.get('id') or '')[:8].upper()} — Guidance Angel Sacred Shop",
+        html=_order_html(order),
+        reply_to=reply_to,
+    )
+    if admin_email and admin_email.lower() != to_email.lower():
+        try:
+            await _dispatch_email(
+                to_addr=admin_email,
+                subject=f"🛍️ New order: {order.get('customer_name')} · ₹{int(order.get('total_inr',0)):,}",
+                html=_order_html(order),
+                reply_to=reply_to,
+            )
+        except Exception as e:
+            logger.warning(f"Admin order email failed: {e}")
+    return email_id
 
 
 
@@ -349,13 +382,10 @@ def _attempt_summary_html(title: str, lines: list, customer: dict) -> str:
 
 async def send_booking_attempt_alert(booking: dict) -> Optional[str]:
     """Notify admin that a booking was *attempted* (paid or not)."""
-    api_key = _cfg("RESEND_API_KEY")
-    sender = _cfg("RESEND_FROM_EMAIL", "Guidance Angel <onboarding@resend.dev>")
     reply_to = _cfg("RESEND_REPLY_TO")
     admin_email = _cfg("ADMIN_NOTIFICATION_EMAIL")
-    if not api_key or not admin_email:
+    if not admin_email:
         return None
-    resend.api_key = api_key
     schedule = (
         f"{booking.get('booking_date')} · {booking.get('booking_slot')}"
         if booking.get("booking_date")
@@ -373,34 +403,20 @@ async def send_booking_attempt_alert(booking: dict) -> Optional[str]:
     ]
     if booking.get("question"):
         lines.append(("Question", str(booking["question"])[:200]))
-    html = _attempt_summary_html("New Booking Attempt", lines, booking)
-    try:
-        params = {
-            "from": sender,
-            "to": [admin_email],
-            "subject": f"⏳ Booking attempt: {booking.get('customer_name','?')} — {booking.get('service_name','?')}",
-            "html": html,
-        }
-        if reply_to:
-            params["reply_to"] = reply_to
-        result = await asyncio.to_thread(resend.Emails.send, params)
-        eid = result.get("id") if isinstance(result, dict) else None
-        logger.info(f"Admin booking-attempt alert sent id={eid}")
-        return eid
-    except Exception as e:
-        logger.error(f"Booking-attempt alert failed: {e}")
-        return None
+    return await _dispatch_email(
+        to_addr=admin_email,
+        subject=f"⏳ Booking attempt: {booking.get('customer_name','?')} — {booking.get('service_name','?')}",
+        html=_attempt_summary_html("New Booking Attempt", lines, booking),
+        reply_to=reply_to,
+    )
 
 
 async def send_order_attempt_alert(order: dict) -> Optional[str]:
     """Notify admin that a shop order was *attempted* (paid or not)."""
-    api_key = _cfg("RESEND_API_KEY")
-    sender = _cfg("RESEND_FROM_EMAIL", "Guidance Angel <onboarding@resend.dev>")
     reply_to = _cfg("RESEND_REPLY_TO")
     admin_email = _cfg("ADMIN_NOTIFICATION_EMAIL")
-    if not api_key or not admin_email:
+    if not admin_email:
         return None
-    resend.api_key = api_key
     items = order.get("items") or []
     items_str = ", ".join(
         f"{(it.get('product_name') or '?')} ×{it.get('quantity', 1)}" for it in items[:5]
@@ -416,20 +432,9 @@ async def send_order_attempt_alert(order: dict) -> Optional[str]:
         ("Coupon", order.get("applied_coupon_code") or "—"),
         ("Status", "Attempt — payment not confirmed yet"),
     ]
-    html = _attempt_summary_html("New Shop Order Attempt", lines, order)
-    try:
-        params = {
-            "from": sender,
-            "to": [admin_email],
-            "subject": f"⏳ Order attempt: {order.get('customer_name','?')} · ₹{int(order.get('total_inr',0)):,}",
-            "html": html,
-        }
-        if reply_to:
-            params["reply_to"] = reply_to
-        result = await asyncio.to_thread(resend.Emails.send, params)
-        eid = result.get("id") if isinstance(result, dict) else None
-        logger.info(f"Admin order-attempt alert sent id={eid}")
-        return eid
-    except Exception as e:
-        logger.error(f"Order-attempt alert failed: {e}")
-        return None
+    return await _dispatch_email(
+        to_addr=admin_email,
+        subject=f"⏳ Order attempt: {order.get('customer_name','?')} · ₹{int(order.get('total_inr',0)):,}",
+        html=_attempt_summary_html("New Shop Order Attempt", lines, order),
+        reply_to=reply_to,
+    )
