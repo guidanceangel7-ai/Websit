@@ -1036,7 +1036,8 @@ class ProductIn(BaseModel):
     blurb: str = ""
     price_inr: Optional[int] = None
     badge: Optional[str] = None
-    image_url: Optional[str] = None  # external URL OR data: URI for uploaded image
+    image_url: Optional[str] = None  # external URL OR data: URI for primary image (back-compat)
+    images: List[str] = []  # gallery — up to 5 images (data URIs or URLs); first is primary
     accent: Optional[str] = "from-[#C8B6E2] to-[#E6DDF1]"
     shop_url: Optional[str] = None
     in_stock: bool = True
@@ -1048,12 +1049,29 @@ class ProductImageUpload(BaseModel):
     image_data: str
 
 
+MAX_PRODUCT_IMAGES = 5
+
+
+def _normalize_product_images(doc: dict) -> dict:
+    """Mutates `doc` so that `images` is the source of truth (up to 5) and
+    `image_url` always mirrors the primary (`images[0]`) for back-compat
+    with older shop frontends."""
+    imgs = doc.get("images") or []
+    if not imgs and doc.get("image_url"):
+        imgs = [doc["image_url"]]
+    imgs = [i for i in imgs if i][:MAX_PRODUCT_IMAGES]
+    doc["images"] = imgs
+    doc["image_url"] = imgs[0] if imgs else None
+    return doc
+
+
 # ----- Public product category endpoints -----
 @api_router.get("/product-categories")
 async def public_list_product_categories():
     """Return product categories with their nested products (for the Shop page)."""
     cats = await db.product_categories.find({}, {"_id": 0}).sort("order", 1).to_list(length=50)
     products = await db.products.find({}, {"_id": 0}).sort("order", 1).to_list(length=500)
+    products = [_normalize_product_images(p) for p in products]
     by_cat: dict[str, list] = {None: []}
     for p in products:
         by_cat.setdefault(p.get("product_category_id"), []).append(p)
@@ -1118,26 +1136,28 @@ async def admin_delete_product_category(cid: str, _admin: str = Depends(verify_a
 @api_router.get("/products")
 async def public_list_products():
     docs = await db.products.find({}, {"_id": 0}).sort("order", 1).to_list(length=200)
-    return docs
+    return [_normalize_product_images(d) for d in docs]
 
 
 @api_router.get("/admin/products")
 async def admin_list_products(_admin: str = Depends(verify_admin)):
     docs = await db.products.find({}, {"_id": 0}).sort("order", 1).to_list(length=500)
-    return docs
+    return [_normalize_product_images(d) for d in docs]
 
 
 @api_router.post("/admin/products")
 async def admin_create_product(payload: ProductIn, _admin: str = Depends(verify_admin)):
     if await db.products.find_one({"id": payload.id}):
         raise HTTPException(status_code=409, detail="Product id already exists")
-    await db.products.insert_one(payload.model_dump())
+    doc = _normalize_product_images(payload.model_dump())
+    await db.products.insert_one(doc)
     return {"success": True}
 
 
 @api_router.put("/admin/products/{pid}")
 async def admin_update_product(pid: str, payload: ProductIn, _admin: str = Depends(verify_admin)):
-    res = await db.products.update_one({"id": pid}, {"$set": payload.model_dump()})
+    doc = _normalize_product_images(payload.model_dump())
+    res = await db.products.update_one({"id": pid}, {"$set": doc})
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"success": True}
@@ -1155,6 +1175,7 @@ async def admin_upload_product_image(
     payload: ProductImageUpload,
     _admin: str = Depends(verify_admin),
 ):
+    """Append an image to the product's gallery (max 5)."""
     data = (payload.image_data or "").strip()
     if not data:
         raise HTTPException(status_code=400, detail="image_data is empty")
@@ -1162,10 +1183,46 @@ async def admin_upload_product_image(
         data = f"data:image/jpeg;base64,{data}"
     if len(data) > 8_500_000:
         raise HTTPException(status_code=413, detail="Image too large (max ~6 MB). Compress first.")
-    res = await db.products.update_one({"id": pid}, {"$set": {"image_url": data}})
-    if res.matched_count == 0:
+    product = await db.products.find_one({"id": pid}, {"_id": 0})
+    if not product:
         raise HTTPException(status_code=404, detail="Product not found")
-    return {"success": True, "image_set": True}
+    images = product.get("images") or ([product["image_url"]] if product.get("image_url") else [])
+    if len(images) >= MAX_PRODUCT_IMAGES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Maximum {MAX_PRODUCT_IMAGES} images allowed. Remove one first.",
+        )
+    images.append(data)
+    await db.products.update_one(
+        {"id": pid},
+        {"$set": {"images": images, "image_url": images[0]}},
+    )
+    return {"success": True, "images": images, "count": len(images)}
+
+
+class ProductImageDelete(BaseModel):
+    index: int
+
+
+@api_router.delete("/admin/products/{pid}/image/{index}")
+async def admin_delete_product_image(
+    pid: str,
+    index: int,
+    _admin: str = Depends(verify_admin),
+):
+    """Remove a single image from the gallery by zero-based index."""
+    product = await db.products.find_one({"id": pid}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    images = product.get("images") or ([product["image_url"]] if product.get("image_url") else [])
+    if index < 0 or index >= len(images):
+        raise HTTPException(status_code=400, detail="Invalid image index")
+    images.pop(index)
+    await db.products.update_one(
+        {"id": pid},
+        {"$set": {"images": images, "image_url": images[0] if images else None}},
+    )
+    return {"success": True, "images": images, "count": len(images)}
 
 
 # ============== Orders (e-commerce) ==============

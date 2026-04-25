@@ -28,6 +28,8 @@ const ACCENTS = [
   { value: "from-[#6B5B95] to-[#9B8AC4]", label: "Deep Lavender" },
 ];
 
+const MAX_IMAGES = 5;
+
 const EMPTY = {
   id: "",
   name: "",
@@ -35,6 +37,7 @@ const EMPTY = {
   price_inr: "",
   badge: "",
   image_url: "",
+  images: [],
   accent: "from-[#C8B6E2] to-[#E6DDF1]",
   in_stock: true,
   shop_url: "",
@@ -43,7 +46,6 @@ const EMPTY = {
 };
 
 export default function ProductsPanel({ token }) {
-  const headers = { Authorization: `Bearer ${token}` };
   const [products, setProducts] = useState([]);
   const [shopCategories, setShopCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -82,7 +84,13 @@ export default function ProductsPanel({ token }) {
 
   const startEdit = (p) => {
     setEditing(p);
-    setForm({ ...EMPTY, ...p });
+    const initialImages =
+      Array.isArray(p.images) && p.images.length > 0
+        ? p.images
+        : p.image_url
+          ? [p.image_url]
+          : [];
+    setForm({ ...EMPTY, ...p, images: initialImages });
     setOpen(true);
   };
 
@@ -94,18 +102,25 @@ export default function ProductsPanel({ token }) {
     }
     setSubmitting(true);
     try {
+      const images = (form.images || []).filter(Boolean).slice(0, MAX_IMAGES);
       const payload = {
         ...form,
         price_inr: form.price_inr ? parseInt(form.price_inr) : null,
         order: parseInt(form.order || 100),
         in_stock: !!form.in_stock,
         product_category_id: form.product_category_id || null,
+        images,
+        image_url: images[0] || null,
       };
       if (editing) {
-        await axios.put(`${API}/admin/products/${editing.id}`, payload, { headers });
+        await axios.put(`${API}/admin/products/${editing.id}`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         toast.success("Product updated ✦");
       } else {
-        await axios.post(`${API}/admin/products`, payload, { headers });
+        await axios.post(`${API}/admin/products`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
         toast.success("Product created ✦");
       }
       setOpen(false);
@@ -120,7 +135,9 @@ export default function ProductsPanel({ token }) {
   const remove = async (p) => {
     if (!window.confirm(`Delete "${p.name}"?`)) return;
     try {
-      await axios.delete(`${API}/admin/products/${p.id}`, { headers });
+      await axios.delete(`${API}/admin/products/${p.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       toast.success("Deleted");
       refresh();
     } catch {
@@ -128,26 +145,31 @@ export default function ProductsPanel({ token }) {
     }
   };
 
-  // Read file as base64 data URI, then save (or stage if creating)
+  // Append a new image to the gallery (up to MAX_IMAGES). When editing an
+  // existing product we persist immediately; for new products we stage in form.
   const handleFile = async (file) => {
     if (!file) return;
     if (file.size > 6 * 1024 * 1024) {
       toast.error("Image too large (max 6 MB). Please compress.");
       return;
     }
+    if ((form.images || []).length >= MAX_IMAGES) {
+      toast.error(`You can add up to ${MAX_IMAGES} images per product.`);
+      return;
+    }
     const reader = new FileReader();
     reader.onload = async (evt) => {
       const dataUri = evt.target.result;
-      // If editing existing, push to backend right away
       if (editing) {
         setUploading(true);
         try {
-          await axios.post(
+          const r = await axios.post(
             `${API}/admin/products/${editing.id}/image`,
             { image_data: dataUri },
-            { headers }
+            { headers: { Authorization: `Bearer ${token}` } }
           );
-          setForm((f) => ({ ...f, image_url: dataUri }));
+          const newImages = r.data?.images || [...(form.images || []), dataUri];
+          setForm((f) => ({ ...f, images: newImages, image_url: newImages[0] || "" }));
           toast.success("Image uploaded ✦");
         } catch (e) {
           toast.error(e?.response?.data?.detail || "Upload failed");
@@ -155,11 +177,37 @@ export default function ProductsPanel({ token }) {
           setUploading(false);
         }
       } else {
-        // Stage in form, will be saved when product is created
-        setForm((f) => ({ ...f, image_url: dataUri }));
+        setForm((f) => {
+          const next = [...(f.images || []), dataUri].slice(0, MAX_IMAGES);
+          return { ...f, images: next, image_url: next[0] || "" };
+        });
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  // Remove image at index. For existing products we hit the backend so other
+  // admins see the change immediately; for new products we just splice form state.
+  const handleRemoveImage = async (index) => {
+    if (editing) {
+      try {
+        const r = await axios.delete(
+          `${API}/admin/products/${editing.id}/image/${index}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        const newImages = r.data?.images || [];
+        setForm((f) => ({ ...f, images: newImages, image_url: newImages[0] || "" }));
+        toast.success("Image removed");
+      } catch (e) {
+        toast.error(e?.response?.data?.detail || "Remove failed");
+      }
+    } else {
+      setForm((f) => {
+        const next = [...(f.images || [])];
+        next.splice(index, 1);
+        return { ...f, images: next, image_url: next[0] || "" };
+      });
+    }
   };
 
   return (
@@ -287,29 +335,31 @@ export default function ProductsPanel({ token }) {
 
           <form onSubmit={submit} className="px-6 py-5 max-h-[65vh] overflow-y-auto bg-white">
             <div className="grid sm:grid-cols-3 gap-5">
-              {/* Image preview / upload */}
+              {/* Image gallery — up to 5 */}
               <div className="sm:col-span-1">
-                <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold mb-2">
-                  Product image
-                </label>
+                <div className="flex items-baseline justify-between mb-2">
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Images <span className="text-ink-plum/40 normal-case tracking-normal text-[10px]">(up to {MAX_IMAGES})</span>
+                  </label>
+                  <span className="text-[10px] text-ink-plum/50">
+                    {(form.images || []).length}/{MAX_IMAGES}
+                  </span>
+                </div>
+
+                {/* Primary preview */}
                 <div
-                  className={`relative aspect-square rounded-2xl border-2 border-dashed border-peach/40 overflow-hidden flex items-center justify-center ${form.image_url ? "" : `bg-gradient-to-br ${form.accent}`}`}
+                  className={`relative aspect-square rounded-2xl border-2 border-dashed border-peach/40 overflow-hidden flex items-center justify-center ${form.images?.[0] ? "" : `bg-gradient-to-br ${form.accent}`}`}
                 >
-                  {form.image_url ? (
+                  {form.images?.[0] ? (
                     <>
                       <img
-                        src={form.image_url}
-                        alt="preview"
+                        src={form.images[0]}
+                        alt="primary preview"
                         className="absolute inset-0 w-full h-full object-cover"
                       />
-                      <button
-                        type="button"
-                        onClick={() => setForm({ ...form, image_url: "" })}
-                        className="absolute top-2 right-2 w-7 h-7 inline-flex items-center justify-center rounded-full bg-white/90 hover:bg-white text-ink-plum"
-                        title="Remove image"
-                      >
-                        <X size={14} />
-                      </button>
+                      <span className="absolute top-2 left-2 text-[9px] tracking-[0.22em] uppercase bg-white/90 text-ink-plum px-2 py-0.5 rounded-full font-bold">
+                        Primary
+                      </span>
                     </>
                   ) : (
                     <div className="text-white text-center px-4">
@@ -318,25 +368,80 @@ export default function ProductsPanel({ token }) {
                     </div>
                   )}
                 </div>
+
+                {/* Thumbnails */}
+                <div
+                  data-testid="product-image-thumbs"
+                  className="mt-3 grid grid-cols-5 gap-1.5"
+                >
+                  {Array.from({ length: MAX_IMAGES }).map((_, idx) => {
+                    const src = form.images?.[idx];
+                    return (
+                      <div
+                        key={`thumb-${idx}`}
+                        data-testid={`product-image-thumb-${idx}`}
+                        className={`relative aspect-square rounded-lg border-2 overflow-hidden ${
+                          src ? "border-peach/40" : "border-dashed border-peach/30 bg-ivory/60"
+                        }`}
+                      >
+                        {src ? (
+                          <>
+                            <img
+                              src={src}
+                              alt={`Image ${idx + 1}`}
+                              className="absolute inset-0 w-full h-full object-cover"
+                            />
+                            <button
+                              type="button"
+                              data-testid={`product-image-remove-${idx}`}
+                              onClick={() => handleRemoveImage(idx)}
+                              className="absolute top-0.5 right-0.5 w-5 h-5 inline-flex items-center justify-center rounded-full bg-white/90 hover:bg-white text-ink-plum shadow"
+                              title="Remove this image"
+                            >
+                              <X size={10} />
+                            </button>
+                          </>
+                        ) : (
+                          <div className="absolute inset-0 flex items-center justify-center text-peach/50">
+                            <Upload size={12} />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
                 <label
-                  className="mt-3 inline-flex items-center justify-center w-full gap-2 rounded-full bg-lavender-deep text-ivory px-4 py-2 text-sm hover:bg-lavender-deeper cursor-pointer disabled:opacity-50"
+                  className={`mt-3 inline-flex items-center justify-center w-full gap-2 rounded-full px-4 py-2 text-sm cursor-pointer transition ${
+                    (form.images || []).length >= MAX_IMAGES
+                      ? "bg-ivory-deep text-ink-plum/40 cursor-not-allowed"
+                      : "bg-lavender-deep text-ivory hover:bg-lavender-deeper"
+                  }`}
                 >
                   {uploading ? (
                     <Loader2 className="animate-spin" size={14} />
                   ) : (
                     <Upload size={14} />
                   )}
-                  Upload image
+                  {(form.images || []).length >= MAX_IMAGES
+                    ? "Limit reached"
+                    : (form.images || []).length === 0
+                      ? "Upload primary"
+                      : "Add another"}
                   <input
                     data-testid="product-image-input"
                     type="file"
                     accept="image/*"
-                    onChange={(e) => handleFile(e.target.files?.[0])}
+                    disabled={(form.images || []).length >= MAX_IMAGES}
+                    onChange={(e) => {
+                      handleFile(e.target.files?.[0]);
+                      e.target.value = "";
+                    }}
                     className="hidden"
                   />
                 </label>
                 <p className="mt-2 text-[10px] text-ink-plum/50 text-center">
-                  Max 6 MB. JPG / PNG / WebP.
+                  First image is the primary thumbnail. Max 6 MB each. JPG / PNG / WebP.
                 </p>
               </div>
 
