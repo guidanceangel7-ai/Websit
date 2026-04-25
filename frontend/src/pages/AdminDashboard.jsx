@@ -44,6 +44,7 @@ import ProductsPanel from "../components/admin/ProductsPanel";
 import OrdersPanel from "../components/admin/OrdersPanel";
 import PromotionsPanel from "../components/admin/PromotionsPanel";
 import TestimonialsPanel from "../components/admin/TestimonialsPanel";
+import ProductCategoriesPanel from "../components/admin/ProductCategoriesPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -235,10 +236,13 @@ export default function AdminDashboard() {
               Services
             </TabsTrigger>
             <TabsTrigger value="categories" data-testid="tab-categories" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
-              Categories
+              Service Categories
             </TabsTrigger>
             <TabsTrigger value="products" data-testid="tab-products" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
               Shop
+            </TabsTrigger>
+            <TabsTrigger value="product-categories" data-testid="tab-product-categories" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
+              Shop Categories
             </TabsTrigger>
             <TabsTrigger value="orders" data-testid="tab-orders" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
               Orders
@@ -570,6 +574,10 @@ export default function AdminDashboard() {
 
         <TabsContent value="products" className="mt-6">
           <ProductsPanel token={token} />
+        </TabsContent>
+
+        <TabsContent value="product-categories" className="mt-6">
+          <ProductCategoriesPanel token={token} />
         </TabsContent>
 
         <TabsContent value="orders" className="mt-6">

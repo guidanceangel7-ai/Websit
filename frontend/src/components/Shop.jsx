@@ -163,9 +163,11 @@ export default function Shop() {
             <Overline>Sacred Shop</Overline>
             <h2
               data-testid="shop-heading"
-              className="font-display mt-4 text-4xl sm:text-5xl lg:text-6xl text-ink-plum leading-[1.04] tracking-tight"
+              className="font-display mt-4 text-4xl sm:text-5xl lg:text-6xl text-ink-plum leading-[1.05] tracking-tight"
             >
-              Intentional <span className="italic text-peach-deep">Wellness</span> Products
+              <span className="block">Intentional</span>
+              <span className="italic text-peach-deep">Wellness</span>{" "}
+              <span>Products</span>
             </h2>
             <div className="mt-6 h-1 w-24 rounded-full bg-gradient-to-r from-peach to-blush" />
             <p className="mt-7 text-base sm:text-lg text-ink-plum/75 leading-relaxed max-w-xl">

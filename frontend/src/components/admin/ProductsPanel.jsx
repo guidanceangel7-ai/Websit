@@ -39,11 +39,13 @@ const EMPTY = {
   in_stock: true,
   shop_url: "",
   order: 100,
+  product_category_id: "",
 };
 
 export default function ProductsPanel({ token }) {
   const headers = { Authorization: `Bearer ${token}` };
   const [products, setProducts] = useState([]);
+  const [shopCategories, setShopCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -54,8 +56,12 @@ export default function ProductsPanel({ token }) {
   const refresh = async () => {
     setLoading(true);
     try {
-      const r = await axios.get(`${API}/admin/products`, { headers });
+      const [r, c] = await Promise.all([
+        axios.get(`${API}/admin/products`, { headers }),
+        axios.get(`${API}/admin/product-categories`, { headers }),
+      ]);
       setProducts(r.data || []);
+      setShopCategories(c.data || []);
     } catch {
       toast.error("Could not load products");
     } finally {
@@ -93,6 +99,7 @@ export default function ProductsPanel({ token }) {
         price_inr: form.price_inr ? parseInt(form.price_inr) : null,
         order: parseInt(form.order || 100),
         in_stock: !!form.in_stock,
+        product_category_id: form.product_category_id || null,
       };
       if (editing) {
         await axios.put(`${API}/admin/products/${editing.id}`, payload, { headers });
@@ -224,6 +231,17 @@ export default function ProductsPanel({ token }) {
                   )}
                 </div>
                 <div className="text-xs text-ink-plum/60 mt-1 line-clamp-2">{p.blurb}</div>
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {p.product_category_id ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] tracking-[0.2em] uppercase bg-lavender-deep/10 text-lavender-deep px-2 py-0.5 rounded-full font-bold">
+                      {shopCategories.find((c) => c.id === p.product_category_id)?.name || p.product_category_id}
+                    </span>
+                  ) : (
+                    <span className="text-[10px] tracking-[0.2em] uppercase bg-peach/15 text-peach-deep px-2 py-0.5 rounded-full font-bold">
+                      Uncategorised
+                    </span>
+                  )}
+                </div>
                 <div className="mt-3 flex items-center justify-between">
                   <span className="text-[10px] font-mono text-ink-plum/50">{p.id}</span>
                   <div className="flex gap-1.5">
@@ -400,6 +418,34 @@ export default function ProductsPanel({ token }) {
                     onChange={(e) => setForm({ ...form, order: e.target.value })}
                     className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 text-ink-plum focus:border-lavender-deep outline-none"
                   />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
+                    Shop category{" "}
+                    <span className="text-ink-plum/50 normal-case tracking-normal text-[10px]">
+                      (groups variants on the public shop)
+                    </span>
+                  </label>
+                  <select
+                    data-testid="product-input-category"
+                    value={form.product_category_id || ""}
+                    onChange={(e) =>
+                      setForm({ ...form, product_category_id: e.target.value })
+                    }
+                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 text-ink-plum focus:border-lavender-deep outline-none"
+                  >
+                    <option value="">— Uncategorised —</option>
+                    {shopCategories.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.id})
+                      </option>
+                    ))}
+                  </select>
+                  {shopCategories.length === 0 && (
+                    <p className="mt-1.5 text-[11px] text-peach-deep/80">
+                      No shop categories yet. Create them under "Shop Categories" tab first.
+                    </p>
+                  )}
                 </div>
                 <div>
                   <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
