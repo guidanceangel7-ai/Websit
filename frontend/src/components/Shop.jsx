@@ -36,7 +36,7 @@ function ProductCard({ p, onBuy, index }) {
                 const size = 7 + ((k * 5) % 9);
                 return (
                   <span
-                    key={k}
+                    key={`twinkle-${k}`}
                     className="absolute opacity-70"
                     style={{
                       top: `${top}%`,

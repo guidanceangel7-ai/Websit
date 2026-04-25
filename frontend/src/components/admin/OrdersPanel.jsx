@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -55,32 +55,36 @@ const PAY_COLOR = (s) =>
   })[s] || "bg-ivory-deep text-ink-plum";
 
 export default function OrdersPanel({ token }) {
-  const headers = { Authorization: `Bearer ${token}` };
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
   const [expanded, setExpanded] = useState(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
-      const r = await axios.get(`${API}/admin/orders`, { headers });
+      const r = await axios.get(`${API}/admin/orders`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       setOrders(r.data || []);
     } catch (e) {
       toast.error("Could not load orders");
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line
-  }, []);
+  }, [refresh]);
 
   const updateStatus = async (oid, order_status) => {
     try {
-      await axios.patch(`${API}/admin/orders/${oid}`, { order_status }, { headers });
+      await axios.patch(
+        `${API}/admin/orders/${oid}`,
+        { order_status },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       toast.success(`Marked ${order_status} ✦`);
       refresh();
     } catch {
@@ -282,7 +286,7 @@ export default function OrdersPanel({ token }) {
                             </div>
                             <ul className="text-sm space-y-1.5">
                               {(o.items || []).map((it, i) => (
-                                <li key={i} className="flex justify-between gap-3">
+                                <li key={`${o.id}-${it.product_id || i}`} className="flex justify-between gap-3">
                                   <span className="text-ink-plum">
                                     {it.product_name}{" "}
                                     <span className="text-ink-plum/60">× {it.quantity}</span>

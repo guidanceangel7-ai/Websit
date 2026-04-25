@@ -19,7 +19,6 @@ const SLOT_OPTIONS = [15, 20, 30, 45, 60, 90, 120];
 const HOURS = Array.from({ length: 25 }).map((_, i) => i);
 
 export default function SettingsPanel({ token }) {
-  const headers = { Authorization: `Bearer ${token}` };
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [s, setS] = useState({
@@ -31,12 +30,11 @@ export default function SettingsPanel({ token }) {
 
   useEffect(() => {
     axios
-      .get(`${API}/admin/settings`, { headers })
+      .get(`${API}/admin/settings`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => setS(r.data))
       .catch(() => toast.error("Could not load settings"))
       .finally(() => setLoading(false));
-    // eslint-disable-next-line
-  }, []);
+  }, [token]);
 
   const toggleDay = (d) => {
     const set = new Set(s.open_days);
@@ -48,7 +46,9 @@ export default function SettingsPanel({ token }) {
   const save = async () => {
     setSaving(true);
     try {
-      await axios.put(`${API}/admin/settings`, s, { headers });
+      await axios.put(`${API}/admin/settings`, s, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
       toast.success("Working hours saved ✦");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Failed to save");

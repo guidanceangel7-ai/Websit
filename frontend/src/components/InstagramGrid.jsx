@@ -75,7 +75,7 @@ function PostCard({ p, i }) {
           const size = 6 + ((k * 7) % 10);
           return (
             <span
-              key={k}
+              key={`twinkle-${k}`}
               className="absolute opacity-70"
               style={{
                 top: `${top}%`,
@@ -149,7 +149,7 @@ export default function InstagramGrid() {
 
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 sm:gap-4">
           {POSTS.map((p, i) => (
-            <PostCard key={i} p={p} i={i} />
+            <PostCard key={p.caption} p={p} i={i} />
           ))}
         </div>
       </div>

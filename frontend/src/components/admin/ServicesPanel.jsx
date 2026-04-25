@@ -6,15 +6,13 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function ServicesPanel({ token }) {
   const [categories, setCategories] = useState([]);
-  const headers = { Authorization: `Bearer ${token}` };
 
   useEffect(() => {
     axios
-      .get(`${API}/admin/categories`, { headers })
+      .get(`${API}/admin/categories`, { headers: { Authorization: `Bearer ${token}` } })
       .then((r) => setCategories(r.data || []))
       .catch(() => setCategories([]));
-    // eslint-disable-next-line
-  }, []);
+  }, [token]);
 
   const fields = [
     { name: "id", label: "Service ID (slug, lowercase, no spaces)", required: true, placeholder: "e.g. ak-90" },

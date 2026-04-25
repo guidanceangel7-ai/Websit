@@ -30,7 +30,7 @@ export default function FAQ() {
         <Accordion type="single" collapsible className="mt-12 space-y-3">
           {FAQS.map((f, idx) => (
             <AccordionItem
-              key={idx}
+              key={f.q}
               value={`item-${idx}`}
               data-testid={`faq-item-${idx}`}
               className="bg-white/85 border border-peach/30 rounded-2xl px-5 sm:px-6 [&[data-state=open]]:shadow-soft"

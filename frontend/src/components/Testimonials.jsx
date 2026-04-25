@@ -11,7 +11,7 @@ function TestimonialCard({ t }) {
     >
       <div className="flex items-center gap-1 text-peach">
         {Array.from({ length: t.rating || 5 }).map((_, i) => (
-          <Star key={i} size={14} />
+          <Star key={`${t.id}-star-${i}`} size={14} />
         ))}
       </div>
       <p className="mt-4 text-sm leading-relaxed text-ink-plum/85 line-clamp-6 font-display italic">

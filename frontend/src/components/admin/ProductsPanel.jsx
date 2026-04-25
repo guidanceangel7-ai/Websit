@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import {
@@ -53,12 +53,13 @@ export default function ProductsPanel({ token }) {
   const [submitting, setSubmitting] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     setLoading(true);
     try {
+      const auth = { headers: { Authorization: `Bearer ${token}` } };
       const [r, c] = await Promise.all([
-        axios.get(`${API}/admin/products`, { headers }),
-        axios.get(`${API}/admin/product-categories`, { headers }),
+        axios.get(`${API}/admin/products`, auth),
+        axios.get(`${API}/admin/product-categories`, auth),
       ]);
       setProducts(r.data || []);
       setShopCategories(c.data || []);
@@ -67,12 +68,11 @@ export default function ProductsPanel({ token }) {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line
-  }, []);
+  }, [refresh]);
 
   const startCreate = () => {
     setEditing(null);
