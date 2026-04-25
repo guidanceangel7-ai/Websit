@@ -131,12 +131,20 @@ class Testimonial(BaseModel):
 # ============== Seed Data ==============
 SEED_CATEGORIES = [
     {
-        "id": "tarot_numerology",
-        "name": "Tarot + Numerology Reading",
-        "tagline": "Clarity through cards & numbers",
-        "description": "A blend of intuitive tarot insights and ancient numerology — clarity, timelines and direction on love, career and life choices.",
+        "id": "tarot_numerology_call",
+        "name": "Tarot + Numerology · Call Reading",
+        "tagline": "Live 1-on-1 call · clarity in real-time",
+        "description": "A live call session blending intuitive tarot insights with ancient numerology — clarity, timelines and direction on love, career and life choices.",
         "icon": "stars",
         "order": 1,
+    },
+    {
+        "id": "tarot_numerology_question",
+        "name": "Tarot + Numerology · Question Reading",
+        "tagline": "Recorded voice notes · 48-hour delivery",
+        "description": "Ask 1, 2, 3 or 5 specific questions and receive a personalised tarot + numerology voice note within 48 hours. Perfect for quick guidance.",
+        "icon": "headphones",
+        "order": 2,
     },
     {
         "id": "akashic",
@@ -144,7 +152,7 @@ SEED_CATEGORIES = [
         "tagline": "Look through your soul's library",
         "description": "Access the records of your eternal life to view long-ago past patterns, present soul lessons and your potential future. Discover karmic threads still influencing you today.",
         "icon": "book",
-        "order": 2,
+        "order": 3,
     },
     {
         "id": "all_in_one",
@@ -152,7 +160,7 @@ SEED_CATEGORIES = [
         "tagline": "The complete soul deep-dive",
         "description": "Overall reading covering your patterns, childhood, behaviour, strengths and weaknesses — a complete in-depth analysis of who you are and your highest potential. Includes Tarot + Numerology + Akashic.",
         "icon": "sparkles",
-        "order": 3,
+        "order": 4,
     },
     {
         "id": "month_ahead",
@@ -160,7 +168,7 @@ SEED_CATEGORIES = [
         "tagline": "Your timeline, foretold",
         "description": "A forward-looking guidance reading covering the month, quarter or year ahead. Combines tarot, numerology and Akashic insights into a clear timeline forecast.",
         "icon": "calendar",
-        "order": 4,
+        "order": 5,
     },
     {
         "id": "healing",
@@ -168,26 +176,26 @@ SEED_CATEGORIES = [
         "tagline": "Reiki + Merlin healing journeys",
         "description": "Daily reiki and merlin healing sessions over 1 week or 21 days. Personalised music to listen to at scheduled time daily, with feedback discussion via WhatsApp voice notes.",
         "icon": "heart",
-        "order": 5,
+        "order": 6,
     },
 ]
 
 SEED_SERVICES = [
     # Tarot + Numerology — Calls
-    {"id": "tn-15-call", "category": "tarot_numerology", "name": "15-min Call Reading", "duration_minutes": 15, "price_inr": 2100,
+    {"id": "tn-15-call", "category": "tarot_numerology_call", "name": "15-min Call Reading", "duration_minutes": 15, "price_inr": 2100,
      "description": "A focused 15-minute call session blending tarot insights with numerology guidance for one specific question.", "is_voice_note": False, "variant": "call"},
-    {"id": "tn-30-call", "category": "tarot_numerology", "name": "30-min Call Reading", "duration_minutes": 30, "price_inr": 4000,
+    {"id": "tn-30-call", "category": "tarot_numerology_call", "name": "30-min Call Reading", "duration_minutes": 30, "price_inr": 4000,
      "description": "A 30-minute call exploring multiple aspects of your life with deeper numerology layers.", "is_voice_note": False, "variant": "call"},
-    {"id": "tn-45-call", "category": "tarot_numerology", "name": "45-min Call Reading", "duration_minutes": 45, "price_inr": 6500,
+    {"id": "tn-45-call", "category": "tarot_numerology_call", "name": "45-min Call Reading", "duration_minutes": 45, "price_inr": 6500,
      "description": "An in-depth 45-minute call covering relationships, career, finances and life path.", "is_voice_note": False, "variant": "call"},
     # Tarot + Numerology — Voice Note Question Readings
-    {"id": "tn-q1", "category": "tarot_numerology", "name": "1 Question Reading", "duration_minutes": None, "price_inr": 550,
+    {"id": "tn-q1", "category": "tarot_numerology_question", "name": "1 Question Reading", "duration_minutes": None, "price_inr": 550,
      "description": "Ask one specific question — receive a recorded voice note answer within 48 hours.", "is_voice_note": True, "variant": "voice_note"},
-    {"id": "tn-q2", "category": "tarot_numerology", "name": "2 Questions Reading", "duration_minutes": None, "price_inr": 1000,
+    {"id": "tn-q2", "category": "tarot_numerology_question", "name": "2 Questions Reading", "duration_minutes": None, "price_inr": 1000,
      "description": "Two questions answered as a recorded voice note within 48 hours.", "is_voice_note": True, "variant": "voice_note"},
-    {"id": "tn-q3", "category": "tarot_numerology", "name": "3 Questions Reading", "duration_minutes": None, "price_inr": 1500,
+    {"id": "tn-q3", "category": "tarot_numerology_question", "name": "3 Questions Reading", "duration_minutes": None, "price_inr": 1500,
      "description": "Three questions answered as a recorded voice note within 48 hours.", "is_voice_note": True, "variant": "voice_note"},
-    {"id": "tn-q5", "category": "tarot_numerology", "name": "5 Questions Reading", "duration_minutes": None, "price_inr": 2200,
+    {"id": "tn-q5", "category": "tarot_numerology_question", "name": "5 Questions Reading", "duration_minutes": None, "price_inr": 2200,
      "description": "Five questions answered as a recorded voice note within 48 hours.", "is_voice_note": True, "variant": "voice_note"},
 
     # Akashic — Calls only
@@ -235,7 +243,7 @@ SEED_TESTIMONIALS = [
 
 @app.on_event("startup")
 async def seed_db():
-    SEED_VERSION = "v2-categories"
+    SEED_VERSION = "v3-categories-split"
     meta = await db.app_meta.find_one({"_id": "seed"}, {"_id": 0}) or {}
     if meta.get("version") != SEED_VERSION:
         await db.services.delete_many({})

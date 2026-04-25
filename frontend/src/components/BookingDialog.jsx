@@ -34,9 +34,13 @@ const RAZORPAY_KEY_ID =
   process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_PLACEHOLDER";
 
 const CATEGORY_META = {
-  tarot_numerology: {
+  tarot_numerology_call: {
     icon: Stars,
     gradient: "from-[#6B5B95] via-[#9B8AC4] to-[#C8B6E2]",
+  },
+  tarot_numerology_question: {
+    icon: Headphones,
+    gradient: "from-[#9B8AC4] via-[#C8B6E2] to-[#E6DDF1]",
   },
   akashic: {
     icon: BookOpen,

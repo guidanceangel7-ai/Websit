@@ -5,10 +5,15 @@ import { Overline, Star } from "./Decor";
 
 // Map category id -> icon + accent gradient (Tailwind-friendly)
 const CATEGORY_META = {
-  tarot_numerology: {
+  tarot_numerology_call: {
     icon: Stars,
     gradient: "from-[#6B5B95] via-[#9B8AC4] to-[#C8B6E2]",
     chip: "bg-[#6B5B95] text-white",
+  },
+  tarot_numerology_question: {
+    icon: Headphones,
+    gradient: "from-[#9B8AC4] via-[#C8B6E2] to-[#E6DDF1]",
+    chip: "bg-[#9B8AC4] text-white",
   },
   akashic: {
     icon: BookOpen,
@@ -136,7 +141,7 @@ export default function Services({ categories, onSelect }) {
             <span className="italic text-lavender-deep">calls to you</span>.
           </h2>
           <p className="mt-5 text-base sm:text-lg text-ink-plum/75 leading-relaxed">
-            Five sacred categories — each tailored to a different soul-need. Pick a
+            Six sacred categories — each tailored to a different soul-need. Pick a
             category, then choose your variant. Jenika takes care of the rest.
           </p>
         </div>
