@@ -230,24 +230,73 @@ SEED_SERVICES = [
 ]
 
 SEED_TESTIMONIALS = [
-    {"id": "t1", "author": "Paridhi", "content": "Jeni is an amazing person who has helped me a lot. Her readings are amazing. If you are facing any problems in life and need guidance she will help you and show you the right path to take. Thanks a lot for your guidance always.", "rating": 5, "source": "website"},
-    {"id": "t2", "author": "Bhagyshree", "content": "The first ever reading I got done was from Jenny in 2020 and all that she said was absolutely to the point. She guided me through the situation I was stuck in and also the timeline she gave was apt. I'm really happy to have met a genuine soul like Jenny.", "rating": 5, "source": "website"},
-    {"id": "t3", "author": "Parul", "content": "She's incredible! I learnt tarot and pendulum dowsing from her. Her lessons are super insightful, and the reading she did for me was pretty spot-on. I'm really grateful for her guidance and the support she shares.", "rating": 5, "source": "website"},
-    {"id": "t4", "author": "Reena", "content": "Jeni was extremely accurate in her readings! She did Tarot reading and Akashic reading for me and my brother. She helped me understand and make some decisions in my life where I was getting stuck! She is a wealth of knowledge and really helped guide me through a difficult time. I would highly recommend Jeni to all – she is gifted indeed!", "rating": 5, "source": "website"},
-    {"id": "t5", "author": "Aanya", "content": "Booked a Tarotscope on Exly and was blown away – every detail rang true and the voice note format made it feel personal. Already gifted one to my sister!", "rating": 5, "source": "instagram"},
-    {"id": "t6", "author": "Ishaan", "content": "Jenika's Akashic Record reading gave me clarity I was searching for during a major career shift. She is gentle, accurate and deeply intuitive.", "rating": 5, "source": "google"},
-    {"id": "t7", "author": "Megha", "content": "Beautiful soul, beautiful guidance. The numerology report was so detailed and matched my year exactly. Highly recommend.", "rating": 5, "source": "google"},
-    {"id": "t8", "author": "Ritika", "content": "I've consulted Jeni multiple times over the past 3 years. She has a rare gift and her readings always come from a place of love. Sisterly and clear.", "rating": 5, "source": "instagram"},
+    {
+        "id": "t1",
+        "author": "Khushboo Sahrawat",
+        "content": "Honestly before speaking to you, I had few signs that lead me to you and I genuinely felt like I was guided to you. The next day onwards itself, I felt so much power coming back to me because you made me realise so many things about myself I was overlooking. The clarity you provided about my lessons and my purpose were absolutely the most helpful for me all my life. Beyond thankful for telling me about my grandfather being my spirit guide — I feel so so blessed. It reminded me of my strengths, of who I am.",
+        "rating": 5,
+        "source": "Akashic · WhatsApp",
+    },
+    {
+        "id": "t2",
+        "author": "Khushali Manoj Bohra",
+        "content": "You had told that me and Aashish were soulmates in past life and we had very good married lives. Yesterday me and Aashish BOTH got the same dream — about being soulmates in the past life! You wereeee soooo accurate about it 😍",
+        "rating": 5,
+        "source": "Tarot · WhatsApp",
+    },
+    {
+        "id": "t3",
+        "author": "Sakshi Sajwan",
+        "content": "It was an excellent experience of Akashic reading. I came to realise some important things and patterns which I need to break in this life. Thank you for helping and answering me that — which part I actually need to rectify in my life. Lots of wishes to you 💕",
+        "rating": 5,
+        "source": "Akashic · 30-min",
+    },
+    {
+        "id": "t4",
+        "author": "Aadishree Deka",
+        "content": "I liked everything about Jenika and her video session. Most importantly, her every guidance is so useful. And the most important part is the sessions are recorded — so in future we can access these videos and take guidance again.",
+        "rating": 5,
+        "source": "Recording · 1-hour",
+    },
+    {
+        "id": "t5",
+        "author": "Paridhi",
+        "content": "Jeni is an amazing person who has helped me a lot. Her readings are amazing. If you are facing any problems in life and need guidance she will help you and show you the right path to take. Thanks a lot for your guidance always.",
+        "rating": 5,
+        "source": "google",
+    },
+    {
+        "id": "t6",
+        "author": "Bhagyshree",
+        "content": "The first ever reading I got done was from Jenny in 2020 and all that she said was absolutely to the point. She guided me through the situation I was stuck in and the timeline she gave was apt. I'm really happy to have met a genuine soul like Jenny.",
+        "rating": 5,
+        "source": "google",
+    },
+    {
+        "id": "t7",
+        "author": "Parul",
+        "content": "She's incredible! I learnt tarot and pendulum dowsing from her. Her lessons are super insightful, and the reading she did for me was pretty spot-on. I'm really grateful for her guidance and the support she shares.",
+        "rating": 5,
+        "source": "google",
+    },
+    {
+        "id": "t8",
+        "author": "Reena",
+        "content": "Jeni was extremely accurate in her readings. She did Tarot and Akashic readings for me and my brother. She helped me make decisions in my life where I was getting stuck. She is a wealth of knowledge and really helped guide me through a difficult time. I would highly recommend Jeni — she is gifted indeed!",
+        "rating": 5,
+        "source": "google",
+    },
 ]
 
 
 @app.on_event("startup")
 async def seed_db():
-    SEED_VERSION = "v3-categories-split"
+    SEED_VERSION = "v4-real-testimonials"
     meta = await db.app_meta.find_one({"_id": "seed"}, {"_id": 0}) or {}
     if meta.get("version") != SEED_VERSION:
         await db.services.delete_many({})
         await db.categories.delete_many({})
+        await db.testimonials.delete_many({})
         await db.app_meta.update_one(
             {"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True
         )
