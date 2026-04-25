@@ -744,6 +744,17 @@ async def create_order(payload: BookingCreate):
     }
     await db.bookings.insert_one(booking_doc)
 
+    # Always alert admin that someone attempted a booking — fires even if the
+    # customer abandons the Razorpay modal or the verify-payment never lands.
+    async def _notify_admin_attempt():
+        try:
+            from email_service import send_booking_attempt_alert
+            await send_booking_attempt_alert(booking_doc)
+        except Exception as e:
+            logger.warning(f"Admin attempt alert failed: {e}")
+
+    asyncio.create_task(_notify_admin_attempt())
+
     return CreateOrderResponse(
         booking_id=booking_id,
         razorpay_order_id=razorpay_order_id,
@@ -1013,17 +1024,87 @@ async def admin_export_orders(_admin: str = Depends(verify_admin)):
 
 
 @api_router.get("/admin/stats")
-async def admin_stats(_admin: str = Depends(verify_admin)):
-    total = await db.bookings.count_documents({})
-    paid = await db.bookings.count_documents({"payment_status": "paid"})
-    pending = await db.bookings.count_documents({"payment_status": "pending"})
-    revenue_pipeline = [
-        {"$match": {"payment_status": "paid"}},
-        {"$group": {"_id": None, "revenue": {"$sum": "$service_price_inr"}}},
+async def admin_stats(
+    period: str = "all",
+    _admin: str = Depends(verify_admin),
+):
+    """Combined stats for the dashboard.
+    period = "week" | "month" | "year" | "all"
+    """
+    # Compute since-cutoff based on requested period
+    now = datetime.now(timezone.utc)
+    cutoff_iso: Optional[str] = None
+    if period == "week":
+        cutoff_iso = (now - timedelta(days=7)).isoformat()
+    elif period == "month":
+        cutoff_iso = (now - timedelta(days=30)).isoformat()
+    elif period == "year":
+        cutoff_iso = (now - timedelta(days=365)).isoformat()
+
+    # ----- Bookings -----
+    bk_match: dict = {}
+    if cutoff_iso:
+        bk_match["created_at"] = {"$gte": cutoff_iso}
+    total_bookings = await db.bookings.count_documents(bk_match)
+    paid_bk = await db.bookings.count_documents({**bk_match, "payment_status": "paid"})
+    pending_bk = await db.bookings.count_documents({**bk_match, "payment_status": "pending"})
+    # Use final_price_inr if present, else fallback to service_price_inr
+    bk_pipeline = [
+        {"$match": {**bk_match, "payment_status": "paid"}},
+        {"$group": {
+            "_id": None,
+            "revenue": {"$sum": {"$ifNull": ["$final_price_inr", "$service_price_inr"]}},
+            "discount_total": {"$sum": {"$ifNull": ["$discount_inr", 0]}},
+        }},
     ]
-    revenue_doc = await db.bookings.aggregate(revenue_pipeline).to_list(length=1)
-    revenue = revenue_doc[0]["revenue"] if revenue_doc else 0
-    return {"total_bookings": total, "paid": paid, "pending": pending, "revenue_inr": revenue}
+    bk_doc = await db.bookings.aggregate(bk_pipeline).to_list(length=1)
+    bk_revenue = bk_doc[0]["revenue"] if bk_doc else 0
+    bk_discount = bk_doc[0]["discount_total"] if bk_doc else 0
+
+    # ----- Orders (Shop) -----
+    od_match: dict = {}
+    if cutoff_iso:
+        od_match["created_at"] = {"$gte": cutoff_iso}
+    total_orders = await db.orders.count_documents(od_match)
+    paid_od = await db.orders.count_documents({**od_match, "payment_status": "paid"})
+    pending_od = await db.orders.count_documents({**od_match, "payment_status": "pending"})
+    od_pipeline = [
+        {"$match": {**od_match, "payment_status": "paid"}},
+        {"$group": {
+            "_id": None,
+            "revenue": {"$sum": "$total_inr"},
+            "discount_total": {"$sum": {"$ifNull": ["$discount_inr", 0]}},
+        }},
+    ]
+    od_doc = await db.orders.aggregate(od_pipeline).to_list(length=1)
+    od_revenue = od_doc[0]["revenue"] if od_doc else 0
+    od_discount = od_doc[0]["discount_total"] if od_doc else 0
+
+    return {
+        "period": period,
+        # legacy keys for any older UI
+        "total_bookings": total_bookings,
+        "paid": paid_bk,
+        "pending": pending_bk,
+        "revenue_inr": bk_revenue + od_revenue,  # COMBINED total at top
+        # detailed split
+        "bookings": {
+            "total": total_bookings,
+            "paid": paid_bk,
+            "pending": pending_bk,
+            "revenue_inr": bk_revenue,
+            "discount_inr": bk_discount,
+        },
+        "orders": {
+            "total": total_orders,
+            "paid": paid_od,
+            "pending": pending_od,
+            "revenue_inr": od_revenue,
+            "discount_inr": od_discount,
+        },
+        "combined_revenue_inr": bk_revenue + od_revenue,
+        "combined_discount_inr": bk_discount + od_discount,
+    }
 
 
 # --- Block-out dates (admin) ---
@@ -1662,6 +1743,17 @@ async def orders_create(payload: OrderCreate):
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     await db.orders.insert_one(doc)
+
+    # Notify admin of the attempt (fires even if customer abandons checkout)
+    async def _notify_admin_order_attempt():
+        try:
+            from email_service import send_order_attempt_alert
+            await send_order_attempt_alert(doc)
+        except Exception as e:
+            logger.warning(f"Admin order-attempt alert failed: {e}")
+
+    asyncio.create_task(_notify_admin_order_attempt())
+
     return {
         "order_id": order_id,
         "razorpay_order_id": rzp_order_id,
@@ -1756,6 +1848,14 @@ async def admin_update_order(
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Order not found")
     return {"success": True, "order_status": payload.order_status}
+
+
+@api_router.delete("/admin/orders/{oid}")
+async def admin_delete_order(oid: str, _admin: str = Depends(verify_admin)):
+    res = await db.orders.delete_one({"id": oid})
+    if res.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"success": True, "removed": res.deleted_count}
 
 
 # ============== Promotions / Coupons ==============

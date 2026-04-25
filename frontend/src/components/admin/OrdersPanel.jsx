@@ -12,6 +12,7 @@ import {
   Filter,
   Package,
   Download,
+  Trash2,
 } from "lucide-react";
 import {
   Table,
@@ -59,6 +60,8 @@ export default function OrdersPanel({ token }) {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [paymentFilter, setPaymentFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState(null);
 
   const refresh = useCallback(async () => {
@@ -93,9 +96,35 @@ export default function OrdersPanel({ token }) {
     }
   };
 
-  const filtered = orders.filter((o) =>
-    statusFilter === "all" ? true : o.order_status === statusFilter
-  );
+  const removeOrder = async (o) => {
+    if (
+      !window.confirm(
+        `Delete order #${(o.id || "").slice(0, 8).toUpperCase()} from ${o.customer_name}?\n\nThis is irreversible.`
+      )
+    )
+      return;
+    try {
+      await axios.delete(`${API}/admin/orders/${o.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      toast.success("Order deleted");
+      refresh();
+    } catch (e) {
+      toast.error(e?.response?.data?.detail || "Could not delete");
+    }
+  };
+
+  const filtered = orders.filter((o) => {
+    if (statusFilter !== "all" && o.order_status !== statusFilter) return false;
+    if (paymentFilter !== "all" && o.payment_status !== paymentFilter)
+      return false;
+    if (search) {
+      const q = search.toLowerCase();
+      const hay = `${o.customer_name || ""} ${o.customer_email || ""} ${o.customer_phone || ""} ${o.id || ""}`.toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
 
   const stats = {
     total: orders.length,
@@ -151,7 +180,26 @@ export default function OrdersPanel({ token }) {
               )
             )}
           </div>
-          <div className="ml-auto inline-flex items-center gap-2">
+          <div className="ml-auto inline-flex items-center gap-2 flex-wrap">
+            <input
+              data-testid="orders-search"
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name / email / phone / id…"
+              className="rounded-full border border-peach/40 bg-white px-3 py-1.5 text-xs w-48 focus:border-lavender-deep outline-none"
+            />
+            <select
+              data-testid="orders-payment-filter"
+              value={paymentFilter}
+              onChange={(e) => setPaymentFilter(e.target.value)}
+              className="rounded-full border border-peach/40 bg-white px-3 py-1.5 text-xs focus:border-lavender-deep outline-none"
+            >
+              <option value="all">All payments</option>
+              <option value="paid">Paid</option>
+              <option value="pending">Pending</option>
+              <option value="failed">Failed</option>
+            </select>
             <button
               data-testid="orders-export-csv"
               onClick={async () => {
@@ -204,7 +252,8 @@ export default function OrdersPanel({ token }) {
               : "No orders match this filter."}
           </div>
         ) : (
-          <Table data-testid="orders-table">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <Table data-testid="orders-table" className="min-w-[820px]">
             <TableHeader className="bg-ivory-deep/50">
               <TableRow>
                 <TableHead>Order</TableHead>
@@ -239,7 +288,15 @@ export default function OrdersPanel({ token }) {
                       {o.items?.length || 0} item{(o.items?.length || 0) > 1 ? "s" : ""}
                     </TableCell>
                     <TableCell className="font-display text-lavender-deep">
-                      ₹{(o.total_inr || 0).toLocaleString("en-IN")}
+                      <div className="flex flex-col">
+                        <span>₹{(o.total_inr || 0).toLocaleString("en-IN")}</span>
+                        {(o.discount_inr || 0) > 0 && (
+                          <span className="text-[10px] text-peach-deep font-normal tracking-wide">
+                            saved ₹{o.discount_inr.toLocaleString("en-IN")}
+                            {o.applied_coupon_code ? ` · ${o.applied_coupon_code}` : ""}
+                          </span>
+                        )}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <Badge className={PAY_COLOR(o.payment_status)}>
@@ -302,6 +359,18 @@ export default function OrdersPanel({ token }) {
                         >
                           <Phone size={14} />
                         </a>
+                        <button
+                          type="button"
+                          data-testid={`order-delete-${o.id}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            removeOrder(o);
+                          }}
+                          className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100"
+                          title="Delete order"
+                        >
+                          <Trash2 size={14} />
+                        </button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -366,6 +435,7 @@ export default function OrdersPanel({ token }) {
               ))}
             </TableBody>
           </Table>
+          </div>
         )}
       </div>
     </div>

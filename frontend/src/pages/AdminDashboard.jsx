@@ -85,6 +85,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("all"); // all | paid | pending | failed
   const [statusFilter, setStatusFilter] = useState("all"); // all | confirmed | completed | cancelled | no_show | pending
+  const [period, setPeriod] = useState("all"); // all | week | month | year
   const [services, setServices] = useState([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [createForm, setCreateForm] = useState({
@@ -112,13 +113,13 @@ export default function AdminDashboard() {
     }
     refresh();
     // eslint-disable-next-line
-  }, []);
+  }, [period]);
 
   const refresh = async () => {
     setLoading(true);
     try {
       const [s, b, bd, sv] = await Promise.all([
-        axios.get(`${API}/admin/stats`, { headers }),
+        axios.get(`${API}/admin/stats?period=${period}`, { headers }),
         axios.get(`${API}/admin/bookings`, { headers }),
         axios.get(`${API}/admin/blocked-dates`, { headers }),
         axios.get(`${API}/services`),
@@ -395,32 +396,71 @@ export default function AdminDashboard() {
                 </button>
               </div>
             </div>
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            ["Total bookings", stats?.total_bookings ?? "—"],
-            ["Paid", stats?.paid ?? "—"],
-            ["Pending", stats?.pending ?? "—"],
-            [
-              "Revenue (₹)",
-              stats?.revenue_inr != null
-                ? `₹${stats.revenue_inr.toLocaleString("en-IN")}`
-                : "—",
-            ],
-          ].map(([label, val]) => (
-            <div
-              key={label}
-              data-testid={`stat-${label.replace(/\s+/g, "-").toLowerCase()}`}
-              className="rounded-2xl bg-white/85 border border-peach/30 px-5 py-5 shadow-soft"
-            >
-              <div className="text-[11px] tracking-[0.22em] uppercase text-peach-deep">
-                {label}
-              </div>
-              <div className="font-display text-3xl text-lavender-deep mt-1">
-                {val}
+            <div className="rounded-3xl bg-gradient-to-br from-[#6B5B95] via-[#9B8AC4] to-[#6B5B95] text-ivory p-5 sm:p-6 shadow-[0_18px_42px_-15px_rgba(58,46,93,0.45)]">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="text-[10px] tracking-[0.32em] uppercase text-[#EBB99A] font-bold">
+                    ✦ Combined Revenue
+                  </div>
+                  <div className="font-display text-4xl sm:text-5xl mt-1.5">
+                    ₹{(stats?.combined_revenue_inr ?? stats?.revenue_inr ?? 0).toLocaleString("en-IN")}
+                  </div>
+                  <div className="text-xs text-ivory/75 mt-1.5">
+                    Bookings ₹{(stats?.bookings?.revenue_inr ?? 0).toLocaleString("en-IN")} ·
+                    Shop ₹{(stats?.orders?.revenue_inr ?? 0).toLocaleString("en-IN")}
+                    {(stats?.combined_discount_inr ?? 0) > 0 && (
+                      <> · Discount given ₹{stats.combined_discount_inr.toLocaleString("en-IN")}</>
+                    )}
+                  </div>
+                </div>
+                <div
+                  data-testid="period-filter"
+                  className="inline-flex bg-white/15 rounded-full p-1 text-xs"
+                >
+                  {[
+                    ["week", "This week"],
+                    ["month", "This month"],
+                    ["year", "This year"],
+                    ["all", "All time"],
+                  ].map(([v, label]) => (
+                    <button
+                      key={v}
+                      data-testid={`period-${v}`}
+                      onClick={() => setPeriod(v)}
+                      className={`px-3 py-1.5 rounded-full transition ${
+                        period === v
+                          ? "bg-ivory text-ink-plum font-semibold"
+                          : "text-ivory/85 hover:text-ivory"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
-          ))}
-        </div>
+
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+              {[
+                ["Bookings", stats?.bookings?.total ?? 0],
+                ["Booking Revenue (₹)", `₹${(stats?.bookings?.revenue_inr ?? 0).toLocaleString("en-IN")}`],
+                ["Paid bookings", stats?.bookings?.paid ?? 0],
+                ["Pending bookings", stats?.bookings?.pending ?? 0],
+              ].map(([label, val]) => (
+                <div
+                  key={label}
+                  data-testid={`stat-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`}
+                  className="rounded-2xl bg-white/85 border border-peach/30 px-5 py-5 shadow-soft"
+                >
+                  <div className="text-[11px] tracking-[0.22em] uppercase text-peach-deep">
+                    {label}
+                  </div>
+                  <div className="font-display text-2xl text-lavender-deep mt-1">
+                    {val}
+                  </div>
+                </div>
+              ))}
+            </div>
 
         {/* Block-out dates moved into Schedule tab below */}
         </TabsContent>
@@ -575,7 +615,8 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          <Table data-testid="admin-bookings-table">
+          <div className="overflow-x-auto -mx-4 sm:mx-0">
+            <Table data-testid="admin-bookings-table" className="min-w-[820px]">
             <TableHeader className="bg-ivory-deep/50">
               <TableRow>
                 <TableHead>Customer</TableHead>
@@ -631,7 +672,21 @@ export default function AdminDashboard() {
                     )}
                   </TableCell>
                   <TableCell className="font-display text-lavender-deep">
-                    ₹{b.service_price_inr?.toLocaleString("en-IN")}
+                    {b.final_price_inr != null && b.final_price_inr !== b.service_price_inr ? (
+                      <div className="flex flex-col">
+                        <span>₹{b.final_price_inr.toLocaleString("en-IN")}</span>
+                        <span className="text-[10px] text-ink-plum/40 font-normal line-through">
+                          ₹{b.service_price_inr?.toLocaleString("en-IN")}
+                        </span>
+                        {b.applied_coupon_code && (
+                          <span className="text-[10px] text-peach-deep font-semibold tracking-wide">
+                            {b.applied_coupon_code}
+                          </span>
+                        )}
+                      </div>
+                    ) : (
+                      <span>₹{(b.final_price_inr ?? b.service_price_inr ?? 0).toLocaleString("en-IN")}</span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <Badge className={PAY_COLOR(b.payment_status)}>
@@ -709,6 +764,7 @@ export default function AdminDashboard() {
               ))}
             </TableBody>
           </Table>
+          </div>
         </div>
         </TabsContent>
 

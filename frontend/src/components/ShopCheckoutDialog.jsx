@@ -231,7 +231,6 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
             toast.success("Order placed ✦", {
               description: "Check your email for confirmation.",
             });
-            onOpenChange(false);
           } catch (err) {
             toast.error("Payment verification failed");
           }
@@ -240,8 +239,20 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
           ondismiss: () => toast("Payment cancelled."),
         },
       };
-      const rzp = new window.Razorpay(options);
-      rzp.open();
+
+      // Close our dialog first to release Radix scroll-lock — fixes mobile
+      // Chrome where the Razorpay modal would get blocked by the parent dialog.
+      onOpenChange(false);
+      setTimeout(() => {
+        try {
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+        } catch (err) {
+          toast.error("Could not open payment window");
+        }
+        setSubmitting(false);
+      }, 60);
+      return;
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not start checkout");
     } finally {

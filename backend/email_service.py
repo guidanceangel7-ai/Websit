@@ -311,3 +311,125 @@ async def send_order_confirmation(order: dict) -> Optional[str]:
     except Exception as e:
         logger.error(f"Failed to send order email to {to_email}: {e}")
         return None
+
+
+
+# ----- Admin attempt alerts ---------------------------------------------------
+# These fire from /create-order endpoints so the admin gets notified even when
+# the customer abandons the Razorpay modal. They go ONLY to the admin (never
+# the customer), so they bypass Resend's testing-mode restriction.
+
+def _attempt_summary_html(title: str, lines: list, customer: dict) -> str:
+    rows = "".join(
+        f'<tr><td style="padding:6px 0; color:#6B5B95; font-size:12px; letter-spacing:0.16em; text-transform:uppercase;">{k}</td>'
+        f'<td style="padding:6px 0 6px 16px; color:#3A2E5D; font-size:14px; font-family: Georgia, serif;">{v}</td></tr>'
+        for k, v in lines
+    )
+    return f"""
+    <html><body style="margin:0; background:#FBF4E8; font-family: -apple-system, sans-serif;">
+      <table align="center" cellpadding="0" cellspacing="0" width="560" style="background:#fff; border-radius:18px; margin:32px auto; box-shadow:0 6px 18px rgba(58,46,93,0.08);">
+        <tr><td style="padding:24px 28px; background:linear-gradient(135deg, #6B5B95, #9B8AC4); border-top-left-radius:18px; border-top-right-radius:18px; color:#FBF4E8;">
+          <div style="font-size:11px; letter-spacing:0.32em; text-transform:uppercase; opacity:0.85;">⚠ Action needed</div>
+          <h2 style="margin:6px 0 0; font-family: Georgia, serif; font-size:22px;">{title}</h2>
+          <p style="margin:6px 0 0; font-size:13px; opacity:0.9;">A customer started a booking/checkout — follow up if they didn't complete payment.</p>
+        </td></tr>
+        <tr><td style="padding:18px 28px;">
+          <table cellpadding="0" cellspacing="0" width="100%">{rows}</table>
+        </td></tr>
+        <tr><td style="padding:6px 28px 22px;">
+          <div style="font-size:11px; letter-spacing:0.18em; color:#9B8AC4; text-transform:uppercase; margin-bottom:8px;">Reach the customer</div>
+          <a href="tel:{customer.get('customer_phone','')}" style="display:inline-block; margin:4px 6px 0 0; padding:9px 16px; border-radius:999px; background:#FBE4D5; color:#3A2E5D; text-decoration:none; font-size:13px;">Call</a>
+          <a href="mailto:{customer.get('customer_email','')}" style="display:inline-block; margin:4px 6px 0 0; padding:9px 16px; border-radius:999px; background:#E6DDF1; color:#3A2E5D; text-decoration:none; font-size:13px;">Email</a>
+          <a href="https://wa.me/{(customer.get('customer_phone') or '').lstrip('+').replace(' ','')}" style="display:inline-block; margin:4px 0; padding:9px 16px; border-radius:999px; background:#6B5B95; color:#FBF4E8; text-decoration:none; font-size:13px;">WhatsApp</a>
+        </td></tr>
+      </table>
+    </body></html>
+    """
+
+
+async def send_booking_attempt_alert(booking: dict) -> Optional[str]:
+    """Notify admin that a booking was *attempted* (paid or not)."""
+    api_key = _cfg("RESEND_API_KEY")
+    sender = _cfg("RESEND_FROM_EMAIL", "Guidance Angel <onboarding@resend.dev>")
+    reply_to = _cfg("RESEND_REPLY_TO")
+    admin_email = _cfg("ADMIN_NOTIFICATION_EMAIL")
+    if not api_key or not admin_email:
+        return None
+    resend.api_key = api_key
+    schedule = (
+        f"{booking.get('booking_date')} · {booking.get('booking_slot')}"
+        if booking.get("booking_date")
+        else "Voice note (no slot)"
+    )
+    lines = [
+        ("Customer", booking.get("customer_name", "—")),
+        ("Email", booking.get("customer_email", "—")),
+        ("Phone", booking.get("customer_phone", "—")),
+        ("Service", booking.get("service_name", "—")),
+        ("Schedule", schedule),
+        ("Amount", f"₹{int(booking.get('final_price_inr') or booking.get('service_price_inr', 0)):,}"),
+        ("Coupon", booking.get("applied_coupon_code") or "—"),
+        ("Status", "Attempt — payment not confirmed yet"),
+    ]
+    if booking.get("question"):
+        lines.append(("Question", str(booking["question"])[:200]))
+    html = _attempt_summary_html("New Booking Attempt", lines, booking)
+    try:
+        params = {
+            "from": sender,
+            "to": [admin_email],
+            "subject": f"⏳ Booking attempt: {booking.get('customer_name','?')} — {booking.get('service_name','?')}",
+            "html": html,
+        }
+        if reply_to:
+            params["reply_to"] = reply_to
+        result = await asyncio.to_thread(resend.Emails.send, params)
+        eid = result.get("id") if isinstance(result, dict) else None
+        logger.info(f"Admin booking-attempt alert sent id={eid}")
+        return eid
+    except Exception as e:
+        logger.error(f"Booking-attempt alert failed: {e}")
+        return None
+
+
+async def send_order_attempt_alert(order: dict) -> Optional[str]:
+    """Notify admin that a shop order was *attempted* (paid or not)."""
+    api_key = _cfg("RESEND_API_KEY")
+    sender = _cfg("RESEND_FROM_EMAIL", "Guidance Angel <onboarding@resend.dev>")
+    reply_to = _cfg("RESEND_REPLY_TO")
+    admin_email = _cfg("ADMIN_NOTIFICATION_EMAIL")
+    if not api_key or not admin_email:
+        return None
+    resend.api_key = api_key
+    items = order.get("items") or []
+    items_str = ", ".join(
+        f"{(it.get('product_name') or '?')} ×{it.get('quantity', 1)}" for it in items[:5]
+    ) or "—"
+    if len(items) > 5:
+        items_str += f" +{len(items) - 5} more"
+    lines = [
+        ("Customer", order.get("customer_name", "—")),
+        ("Email", order.get("customer_email", "—")),
+        ("Phone", order.get("customer_phone", "—")),
+        ("Items", items_str),
+        ("Total", f"₹{int(order.get('total_inr', 0)):,}"),
+        ("Coupon", order.get("applied_coupon_code") or "—"),
+        ("Status", "Attempt — payment not confirmed yet"),
+    ]
+    html = _attempt_summary_html("New Shop Order Attempt", lines, order)
+    try:
+        params = {
+            "from": sender,
+            "to": [admin_email],
+            "subject": f"⏳ Order attempt: {order.get('customer_name','?')} · ₹{int(order.get('total_inr',0)):,}",
+            "html": html,
+        }
+        if reply_to:
+            params["reply_to"] = reply_to
+        result = await asyncio.to_thread(resend.Emails.send, params)
+        eid = result.get("id") if isinstance(result, dict) else None
+        logger.info(f"Admin order-attempt alert sent id={eid}")
+        return eid
+    except Exception as e:
+        logger.error(f"Order-attempt alert failed: {e}")
+        return None

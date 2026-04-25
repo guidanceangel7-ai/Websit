@@ -320,9 +320,8 @@ export default function BookingDialog({
               razorpay_signature: response.razorpay_signature,
             });
             toast.success("Booking confirmed ✦", {
-              description: "Check your email/WhatsApp for confirmation.",
+              description: "Check your email for confirmation.",
             });
-            onOpenChange(false);
           } catch (err) {
             toast.error("Payment verification failed");
           }
@@ -333,10 +332,22 @@ export default function BookingDialog({
           },
         },
       };
-      const rzp = new window.Razorpay(options);
-      rzp.open();
-      // Razorpay modal is now visible — release our spinner
-      setSubmitting(false);
+
+      // Close our Radix dialog FIRST so it stops scroll-locking the body and
+      // un-aria-hides siblings — Razorpay's checkout iframe is appended at
+      // body root and on mobile Chrome that conflict often makes it unclickable.
+      onOpenChange(false);
+
+      // Defer the Razorpay open by one tick so Radix has time to unmount.
+      setTimeout(() => {
+        try {
+          const rzp = new window.Razorpay(options);
+          rzp.open();
+        } catch (err) {
+          toast.error("Could not open payment window");
+        }
+        setSubmitting(false);
+      }, 60);
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Could not start booking");
       setSubmitting(false);
