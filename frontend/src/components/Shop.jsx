@@ -1,34 +1,33 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import axios from "axios";
 import { motion } from "framer-motion";
 import { ShoppingBag, ArrowRight, Quote } from "lucide-react";
 import { Overline, Star } from "./Decor";
 import { BRAND } from "../lib/brand";
 
-const PRODUCTS = [
-  {
-    name: "Energised Crystals",
-    blurb:
-      "Hand-picked rose quartz, amethyst, citrine and clear quartz — cleansed and charged with reiki for their highest purpose.",
-    accent: "from-[#C8B6E2] to-[#E6DDF1]",
-    badge: "Most Loved",
-  },
-  {
-    name: "Intention Candles",
-    blurb:
-      "Soy wax candles infused with herbs, essential oils and mantras — for love, abundance, protection and clarity rituals.",
-    accent: "from-[#F4C6D6] to-[#FBE4D5]",
-    badge: "Bestseller",
-  },
-  {
-    name: "Healing Oils",
-    blurb:
-      "Sacred blends crafted with crystals, herbs and pure essential oils. Anoint candles, pulse points and altars.",
-    accent: "from-[#EBB99A] to-[#F4C6D6]",
-    badge: "New",
-  },
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const FALLBACK_PRODUCTS = [
+  { id: "p-crystals", name: "Energised Crystals", blurb: "Hand-picked rose quartz, amethyst and citrine — cleansed and charged with reiki.", accent: "from-[#C8B6E2] to-[#E6DDF1]", badge: "Most Loved", shop_url: "https://guidanceangel7.exlyapp.com" },
+  { id: "p-candles", name: "Intention Candles", blurb: "Soy wax candles infused with herbs and oils — for love, abundance and clarity rituals.", accent: "from-[#F4C6D6] to-[#FBE4D5]", badge: "Bestseller", shop_url: "https://guidanceangel7.exlyapp.com" },
+  { id: "p-oils", name: "Healing Oils", blurb: "Sacred blends crafted with crystals and essential oils. Anoint candles, pulse points and altars.", accent: "from-[#EBB99A] to-[#F4C6D6]", badge: "New", shop_url: "https://guidanceangel7.exlyapp.com" },
 ];
 
 export default function Shop() {
+  const [products, setProducts] = useState(FALLBACK_PRODUCTS);
+
+  useEffect(() => {
+    let alive = true;
+    axios
+      .get(`${API}/products`)
+      .then((r) => {
+        if (alive && Array.isArray(r.data) && r.data.length) setProducts(r.data);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
   return (
     <section
       id="shop"
@@ -106,9 +105,9 @@ export default function Shop() {
 
         {/* Product cards */}
         <div className="mt-12 sm:mt-14 grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          {PRODUCTS.map((p, i) => (
+          {products.map((p, i) => (
             <motion.div
-              key={p.name}
+              key={p.id || p.name}
               data-testid={`shop-product-${i}`}
               initial={{ opacity: 0, y: 14 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -116,47 +115,59 @@ export default function Shop() {
               transition={{ duration: 0.55, delay: i * 0.07 }}
               className="group rounded-3xl bg-white border border-peach/30 overflow-hidden shadow-soft hover:-translate-y-1 hover:shadow-[0_18px_40px_-15px_rgba(107,91,149,0.22)] transition"
             >
-              <div
-                className={`relative aspect-[5/3] bg-gradient-to-br ${p.accent} flex items-center justify-center`}
-              >
-                {/* Decorative starfield */}
-                <div aria-hidden="true" className="absolute inset-0">
-                  {Array.from({ length: 14 }).map((_, k) => {
-                    const top = (k * 31) % 100;
-                    const left = (k * 47) % 100;
-                    const size = 7 + ((k * 5) % 9);
-                    return (
-                      <span
-                        key={k}
-                        className="absolute opacity-70"
-                        style={{
-                          top: `${top}%`,
-                          left: `${left}%`,
-                          animation: `twinkle ${3 + (k % 4)}s ease-in-out infinite`,
-                          animationDelay: `${(k % 5) * 0.3}s`,
-                        }}
-                      >
-                        <Star size={size} color="#FBF4E8" />
-                      </span>
-                    );
-                  })}
-                </div>
-                <div className="absolute top-4 left-4 text-[10px] tracking-[0.28em] uppercase bg-white/90 backdrop-blur text-ink-plum px-3 py-1 rounded-full font-bold">
-                  {p.badge}
-                </div>
-                <div className="relative font-display text-3xl sm:text-4xl text-white drop-shadow-[0_2px_8px_rgba(58,46,93,0.3)] italic">
-                  {p.name.split(" ")[0]}
-                </div>
+              <div className={`relative aspect-[5/3] flex items-center justify-center ${p.image_url ? "" : `bg-gradient-to-br ${p.accent || "from-[#C8B6E2] to-[#E6DDF1]"}`}`}>
+                {p.image_url && (
+                  <img src={p.image_url} alt={p.name} className="absolute inset-0 w-full h-full object-cover" loading="lazy" />
+                )}
+                {/* Decorative starfield (only when no image) */}
+                {!p.image_url && (
+                  <div aria-hidden="true" className="absolute inset-0">
+                    {Array.from({ length: 14 }).map((_, k) => {
+                      const top = (k * 31) % 100;
+                      const left = (k * 47) % 100;
+                      const size = 7 + ((k * 5) % 9);
+                      return (
+                        <span
+                          key={k}
+                          className="absolute opacity-70"
+                          style={{
+                            top: `${top}%`,
+                            left: `${left}%`,
+                            animation: `twinkle ${3 + (k % 4)}s ease-in-out infinite`,
+                            animationDelay: `${(k % 5) * 0.3}s`,
+                          }}
+                        >
+                          <Star size={size} color="#FBF4E8" />
+                        </span>
+                      );
+                    })}
+                  </div>
+                )}
+                {p.badge && (
+                  <div className="absolute top-4 left-4 text-[10px] tracking-[0.28em] uppercase bg-white/90 backdrop-blur text-ink-plum px-3 py-1 rounded-full font-bold z-10">
+                    {p.badge}
+                  </div>
+                )}
+                {!p.image_url && (
+                  <div className="relative font-display text-3xl sm:text-4xl text-white drop-shadow-[0_2px_8px_rgba(58,46,93,0.3)] italic">
+                    {p.name.split(" ")[0]}
+                  </div>
+                )}
               </div>
               <div className="p-6">
-                <div className="font-display text-xl text-ink-plum">
-                  {p.name}
+                <div className="flex items-baseline justify-between gap-3">
+                  <div className="font-display text-xl text-ink-plum">{p.name}</div>
+                  {p.price_inr && (
+                    <div className="font-display text-lavender-deep text-lg">
+                      ₹{p.price_inr.toLocaleString("en-IN")}
+                    </div>
+                  )}
                 </div>
-                <p className="mt-2 text-sm text-ink-plum/75 leading-relaxed">
+                <p className="mt-2 text-sm text-ink-plum/75 leading-relaxed line-clamp-3">
                   {p.blurb}
                 </p>
                 <a
-                  href={BRAND.exlySite}
+                  href={p.shop_url || BRAND.exlySite}
                   target="_blank"
                   rel="noreferrer"
                   className="mt-5 inline-flex items-center gap-1.5 text-sm font-medium text-lavender-deep group-hover:translate-x-0.5 transition"

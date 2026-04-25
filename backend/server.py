@@ -8,7 +8,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional
 import uuid
-from datetime import datetime, timezone, date as date_type
+from datetime import datetime, timezone, date as date_type, timedelta
 import hmac
 import hashlib
 import jwt
@@ -396,14 +396,52 @@ SEED_TESTIMONIALS = [
 ]
 
 
+SEED_PRODUCTS = [
+    {
+        "id": "p-crystals",
+        "name": "Energised Crystals",
+        "blurb": "Hand-picked rose quartz, amethyst, citrine and clear quartz — cleansed and charged with reiki for their highest purpose.",
+        "price_inr": None,
+        "badge": "Most Loved",
+        "image_url": None,
+        "accent": "from-[#C8B6E2] to-[#E6DDF1]",
+        "shop_url": "https://guidanceangel7.exlyapp.com",
+        "order": 1,
+    },
+    {
+        "id": "p-candles",
+        "name": "Intention Candles",
+        "blurb": "Soy wax candles infused with herbs, essential oils and mantras — for love, abundance, protection and clarity rituals.",
+        "price_inr": None,
+        "badge": "Bestseller",
+        "image_url": None,
+        "accent": "from-[#F4C6D6] to-[#FBE4D5]",
+        "shop_url": "https://guidanceangel7.exlyapp.com",
+        "order": 2,
+    },
+    {
+        "id": "p-oils",
+        "name": "Healing Oils",
+        "blurb": "Sacred blends crafted with crystals, herbs and pure essential oils. Anoint candles, pulse points and altars.",
+        "price_inr": None,
+        "badge": "New",
+        "image_url": None,
+        "accent": "from-[#EBB99A] to-[#F4C6D6]",
+        "shop_url": "https://guidanceangel7.exlyapp.com",
+        "order": 3,
+    },
+]
+
+
 @app.on_event("startup")
 async def seed_db():
-    SEED_VERSION = "v5-more-testimonials"
+    SEED_VERSION = "v6-products-settings"
     meta = await db.app_meta.find_one({"_id": "seed"}, {"_id": 0}) or {}
     if meta.get("version") != SEED_VERSION:
         await db.services.delete_many({})
         await db.categories.delete_many({})
         await db.testimonials.delete_many({})
+        await db.products.delete_many({})
         await db.app_meta.update_one(
             {"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True
         )
@@ -416,9 +454,23 @@ async def seed_db():
     testimonials_count = await db.testimonials.count_documents({})
     if testimonials_count == 0:
         await db.testimonials.insert_many([dict(t) for t in SEED_TESTIMONIALS])
+    products_count = await db.products.count_documents({})
+    if products_count == 0:
+        await db.products.insert_many([dict(p) for p in SEED_PRODUCTS])
+    # Default settings
+    settings_doc = await db.settings.find_one({"_id": "main"})
+    if not settings_doc:
+        await db.settings.insert_one({
+            "_id": "main",
+            "open_hour": 10,
+            "close_hour": 20,
+            "slot_minutes": 30,
+            "open_days": [0, 1, 2, 3, 4, 5],
+        })
     logger.info(
         f"DB seeded {SEED_VERSION}. Cats: {await db.categories.count_documents({})}, "
         f"Services: {await db.services.count_documents({})}, "
+        f"Products: {await db.products.count_documents({})}, "
         f"Testimonials: {await db.testimonials.count_documents({})}"
     )
 
@@ -472,16 +524,28 @@ async def list_testimonials():
     return docs
 
 
+async def _get_settings() -> dict:
+    s = await db.settings.find_one({"_id": "main"}, {"_id": 0}) or {}
+    return {
+        "open_hour": s.get("open_hour", 10),
+        "close_hour": s.get("close_hour", 20),
+        "slot_minutes": s.get("slot_minutes", 30),
+        "open_days": s.get("open_days", [0, 1, 2, 3, 4, 5]),  # 0=Mon ... 6=Sun (Sun closed default)
+    }
+
+
 @api_router.get("/slots/{date_str}")
 async def available_slots(date_str: str):
-    """Return available slots for a date (default 10 AM - 8 PM Mon-Sat, 30-min)."""
+    """Return available slots for a date — driven by admin settings."""
     try:
         d = datetime.strptime(date_str, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid date format, use YYYY-MM-DD")
-    if d.weekday() == 6:  # Sunday
-        return {"date": date_str, "slots": [], "is_open": False, "message": "Closed on Sundays"}
-    # Check admin block-out
+
+    settings = await _get_settings()
+    if d.weekday() not in settings["open_days"]:
+        return {"date": date_str, "slots": [], "is_open": False, "message": "Closed on this day"}
+
     blocked = await db.blocked_dates.find_one({"date": date_str}, {"_id": 0})
     if blocked:
         return {
@@ -490,15 +554,16 @@ async def available_slots(date_str: str):
             "is_open": False,
             "message": blocked.get("reason") or "Unavailable on this date",
         }
-    # Generate slots 10:00 to 19:30 (last slot starts at 7:30 PM)
+
+    # Generate slots from open_hour:00 to (close_hour-1):30 in slot_minutes increments
     all_slots = []
-    for hour in range(10, 20):
-        for minute in (0, 30):
-            if hour == 19 and minute == 30:
-                continue
-            label = datetime(2000, 1, 1, hour, minute).strftime("%I:%M %p").lstrip("0")
-            all_slots.append(label)
-    # Remove already booked slots
+    cur = datetime(2000, 1, 1, settings["open_hour"], 0)
+    end = datetime(2000, 1, 1, settings["close_hour"], 0)
+    step = timedelta(minutes=settings["slot_minutes"])
+    while cur < end:
+        all_slots.append(cur.strftime("%I:%M %p").lstrip("0"))
+        cur += step
+
     booked = await db.bookings.find(
         {"booking_date": date_str, "payment_status": "paid"},
         {"_id": 0, "booking_slot": 1}
@@ -720,6 +785,205 @@ async def remove_blocked_date(date_str: str, _admin: str = Depends(verify_admin)
 async def public_blocked_dates():
     docs = await db.blocked_dates.find({}, {"_id": 0, "reason": 0}).to_list(length=500)
     return [d["date"] for d in docs]
+
+
+# ============== Settings (admin) ==============
+class Settings(BaseModel):
+    open_hour: int = 10
+    close_hour: int = 20
+    slot_minutes: int = 30
+    open_days: List[int] = [0, 1, 2, 3, 4, 5]
+
+
+@api_router.get("/admin/settings")
+async def admin_get_settings(_admin: str = Depends(verify_admin)):
+    return await _get_settings()
+
+
+@api_router.put("/admin/settings")
+async def admin_update_settings(
+    payload: Settings, _admin: str = Depends(verify_admin)
+):
+    if not (0 <= payload.open_hour < 24) or not (0 < payload.close_hour <= 24):
+        raise HTTPException(status_code=400, detail="Hours must be in 0–24 range")
+    if payload.open_hour >= payload.close_hour:
+        raise HTTPException(status_code=400, detail="open_hour must be before close_hour")
+    if payload.slot_minutes not in (15, 20, 30, 45, 60, 90, 120):
+        raise HTTPException(status_code=400, detail="Slot minutes must be 15/20/30/45/60/90/120")
+    await db.settings.update_one(
+        {"_id": "main"},
+        {"$set": payload.model_dump()},
+        upsert=True,
+    )
+    return {"success": True, **payload.model_dump()}
+
+
+# ============== Categories CRUD (admin) ==============
+class CategoryIn(BaseModel):
+    id: str
+    name: str
+    tagline: Optional[str] = ""
+    description: Optional[str] = ""
+    icon: Optional[str] = "stars"
+    order: int = 100
+
+
+@api_router.get("/admin/categories")
+async def admin_list_categories(_admin: str = Depends(verify_admin)):
+    docs = await db.categories.find({}, {"_id": 0}).sort("order", 1).to_list(length=100)
+    return docs
+
+
+@api_router.post("/admin/categories")
+async def admin_create_category(payload: CategoryIn, _admin: str = Depends(verify_admin)):
+    existing = await db.categories.find_one({"id": payload.id})
+    if existing:
+        raise HTTPException(status_code=409, detail="Category id already exists")
+    await db.categories.insert_one(payload.model_dump())
+    return {"success": True, "category": payload.model_dump()}
+
+
+@api_router.put("/admin/categories/{cat_id}")
+async def admin_update_category(cat_id: str, payload: CategoryIn, _admin: str = Depends(verify_admin)):
+    res = await db.categories.update_one(
+        {"id": cat_id}, {"$set": payload.model_dump()}
+    )
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    return {"success": True}
+
+
+@api_router.delete("/admin/categories/{cat_id}")
+async def admin_delete_category(cat_id: str, _admin: str = Depends(verify_admin)):
+    # Also delete services in that category
+    await db.services.delete_many({"category": cat_id})
+    res = await db.categories.delete_one({"id": cat_id})
+    return {"success": True, "removed": res.deleted_count}
+
+
+# ============== Services CRUD (admin) ==============
+class ServiceIn(BaseModel):
+    id: str
+    category: str
+    name: str
+    duration_minutes: Optional[int] = None
+    price_inr: int
+    description: str = ""
+    is_voice_note: bool = False
+    variant: Optional[str] = "call"
+    program_days: Optional[int] = None
+
+
+@api_router.get("/admin/services")
+async def admin_list_services(_admin: str = Depends(verify_admin)):
+    docs = await db.services.find({}, {"_id": 0}).to_list(length=500)
+    return docs
+
+
+@api_router.post("/admin/services")
+async def admin_create_service(payload: ServiceIn, _admin: str = Depends(verify_admin)):
+    if await db.services.find_one({"id": payload.id}):
+        raise HTTPException(status_code=409, detail="Service id already exists")
+    await db.services.insert_one(payload.model_dump())
+    return {"success": True}
+
+
+@api_router.put("/admin/services/{service_id}")
+async def admin_update_service(service_id: str, payload: ServiceIn, _admin: str = Depends(verify_admin)):
+    res = await db.services.update_one({"id": service_id}, {"$set": payload.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Service not found")
+    return {"success": True}
+
+
+@api_router.delete("/admin/services/{service_id}")
+async def admin_delete_service(service_id: str, _admin: str = Depends(verify_admin)):
+    res = await db.services.delete_one({"id": service_id})
+    return {"success": True, "removed": res.deleted_count}
+
+
+# ============== Testimonials CRUD (admin) ==============
+class TestimonialIn(BaseModel):
+    id: str
+    author: str
+    content: str
+    rating: int = 5
+    source: Optional[str] = ""
+
+
+@api_router.get("/admin/testimonials")
+async def admin_list_testimonials(_admin: str = Depends(verify_admin)):
+    docs = await db.testimonials.find({}, {"_id": 0}).to_list(length=500)
+    return docs
+
+
+@api_router.post("/admin/testimonials")
+async def admin_create_testimonial(payload: TestimonialIn, _admin: str = Depends(verify_admin)):
+    if await db.testimonials.find_one({"id": payload.id}):
+        raise HTTPException(status_code=409, detail="Testimonial id already exists")
+    await db.testimonials.insert_one(payload.model_dump())
+    return {"success": True}
+
+
+@api_router.put("/admin/testimonials/{tid}")
+async def admin_update_testimonial(tid: str, payload: TestimonialIn, _admin: str = Depends(verify_admin)):
+    res = await db.testimonials.update_one({"id": tid}, {"$set": payload.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Testimonial not found")
+    return {"success": True}
+
+
+@api_router.delete("/admin/testimonials/{tid}")
+async def admin_delete_testimonial(tid: str, _admin: str = Depends(verify_admin)):
+    res = await db.testimonials.delete_one({"id": tid})
+    return {"success": True, "removed": res.deleted_count}
+
+
+# ============== Products (Sacred Shop) ==============
+class ProductIn(BaseModel):
+    id: str
+    name: str
+    blurb: str = ""
+    price_inr: Optional[int] = None
+    badge: Optional[str] = None
+    image_url: Optional[str] = None  # can be solid/gradient color name or image URL
+    accent: Optional[str] = "from-[#C8B6E2] to-[#E6DDF1]"
+    shop_url: Optional[str] = None
+    order: int = 100
+
+
+@api_router.get("/products")
+async def public_list_products():
+    docs = await db.products.find({}, {"_id": 0}).sort("order", 1).to_list(length=200)
+    return docs
+
+
+@api_router.get("/admin/products")
+async def admin_list_products(_admin: str = Depends(verify_admin)):
+    docs = await db.products.find({}, {"_id": 0}).sort("order", 1).to_list(length=500)
+    return docs
+
+
+@api_router.post("/admin/products")
+async def admin_create_product(payload: ProductIn, _admin: str = Depends(verify_admin)):
+    if await db.products.find_one({"id": payload.id}):
+        raise HTTPException(status_code=409, detail="Product id already exists")
+    await db.products.insert_one(payload.model_dump())
+    return {"success": True}
+
+
+@api_router.put("/admin/products/{pid}")
+async def admin_update_product(pid: str, payload: ProductIn, _admin: str = Depends(verify_admin)):
+    res = await db.products.update_one({"id": pid}, {"$set": payload.model_dump()})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Product not found")
+    return {"success": True}
+
+
+@api_router.delete("/admin/products/{pid}")
+async def admin_delete_product(pid: str, _admin: str = Depends(verify_admin)):
+    res = await db.products.delete_one({"id": pid})
+    return {"success": True, "removed": res.deleted_count}
 
 
 # ============== Wire-up ==============

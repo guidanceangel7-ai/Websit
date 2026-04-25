@@ -36,6 +36,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
+import SettingsPanel from "../components/admin/SettingsPanel";
+import ServicesPanel from "../components/admin/ServicesPanel";
+import CategoriesPanel from "../components/admin/CategoriesPanel";
+import ProductsPanel from "../components/admin/ProductsPanel";
+import TestimonialsPanel from "../components/admin/TestimonialsPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -206,13 +212,39 @@ export default function AdminDashboard() {
 
       <main className="max-w-7xl mx-auto px-6 sm:px-8 py-10">
         <h1 className="font-display text-3xl sm:text-4xl text-ink-plum">
-          Bookings Dashboard
+          Admin Sanctum
         </h1>
         <p className="text-sm text-ink-plum/60 mt-1">
-          Live data from your sanctuary.
+          Full control over your bookings, services, products and content.
         </p>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-8">
+        <Tabs defaultValue="bookings" className="mt-8">
+          <TabsList
+            data-testid="admin-tabs"
+            className="bg-white/85 border border-peach/30 rounded-full p-1 inline-flex flex-wrap h-auto gap-1"
+          >
+            <TabsTrigger value="bookings" data-testid="tab-bookings" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
+              Bookings
+            </TabsTrigger>
+            <TabsTrigger value="schedule" data-testid="tab-schedule" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
+              Schedule
+            </TabsTrigger>
+            <TabsTrigger value="services" data-testid="tab-services" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
+              Services
+            </TabsTrigger>
+            <TabsTrigger value="categories" data-testid="tab-categories" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
+              Categories
+            </TabsTrigger>
+            <TabsTrigger value="products" data-testid="tab-products" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
+              Shop
+            </TabsTrigger>
+            <TabsTrigger value="testimonials" data-testid="tab-testimonials" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
+              Testimonials
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="bookings" className="mt-6">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {[
             ["Total bookings", stats?.total_bookings ?? "—"],
             ["Paid", stats?.paid ?? "—"],
@@ -239,8 +271,13 @@ export default function AdminDashboard() {
           ))}
         </div>
 
-        {/* Block-out dates */}
-        <div className="mt-10 rounded-3xl bg-white/85 border border-peach/30 p-6 sm:p-8">
+        {/* Block-out dates moved into Schedule tab below */}
+        </TabsContent>
+
+        <TabsContent value="schedule" className="mt-6 space-y-6">
+          <SettingsPanel token={token} />
+
+          <div className="rounded-3xl bg-white/85 border border-peach/30 p-6 sm:p-8">
           <div className="flex items-center gap-2">
             <CalendarOff size={18} className="text-lavender-deep" />
             <h2 className="font-display text-xl text-ink-plum">
@@ -336,8 +373,10 @@ export default function AdminDashboard() {
             ))}
           </div>
         </div>
+        </TabsContent>
 
-        <div className="mt-10 rounded-3xl bg-white/85 border border-peach/30 overflow-hidden">
+        <TabsContent value="bookings" className="space-y-0 mt-0">
+        <div className="mt-6 rounded-3xl bg-white/85 border border-peach/30 overflow-hidden">
           {/* Filters */}
           <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-peach/20 bg-ivory-deep/30">
             <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-peach-deep">
@@ -511,6 +550,24 @@ export default function AdminDashboard() {
             </TableBody>
           </Table>
         </div>
+        </TabsContent>
+
+        <TabsContent value="services" className="mt-6">
+          <ServicesPanel token={token} />
+        </TabsContent>
+
+        <TabsContent value="categories" className="mt-6">
+          <CategoriesPanel token={token} />
+        </TabsContent>
+
+        <TabsContent value="products" className="mt-6">
+          <ProductsPanel token={token} />
+        </TabsContent>
+
+        <TabsContent value="testimonials" className="mt-6">
+          <TestimonialsPanel token={token} />
+        </TabsContent>
+        </Tabs>
       </main>
     </div>
   );
