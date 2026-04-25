@@ -1,0 +1,44 @@
+{
+  "summary": "Iteration-3 deltas verified end-to-end. Backend: 10/10 new pytest cases pass (PATCH /api/admin/bookings/{id} for all valid statuses, invalid 400, missing 404, no-token 401; WhatsApp no-op log line confirmed and booking still confirmed via mock-pay). All 24 regression tests from iteration 1+2 still green. Frontend: HeroMarquee, PressStrip, HowItWorks (data-testid=how-section, 4 step cards), InstagramGrid (data-testid=instagram-section, 6 instagram-post-* cards) all render; service-card-tn-30 has 'Most Loved' badge, service-card-ak-60 has 'Deepest Journey' badge, tn-45/ak-45/ak-60 carry 'Save ₹500' chips; @guidance_angel7 handle and IG link to /guidance_angel7/ found in 9 places (footer/contact/CTA). Admin dashboard: shadcn Calendar+Popover replaces native date picker; payment + status filter buttons present and counter updates; status dropdown PATCH flow verified — clicking status-set-completed-{id} fires PATCH, returns 200, persists in DB (post-update booking_status='completed') and shows toast 'Marked completed ✦'.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration3_status_and_whatsapp.py",
+    "/app/backend/tests/test_backend_api.py",
+    "/app/backend/tests/test_blocked_dates_and_email.py",
+    "/app/test_reports/pytest/iteration_3_results.xml",
+    "/app/test_reports/pytest/iteration_3_regression.xml"
+  ],
+  "action_items": [
+    "(Minor / non-blocking) HowItWorks step cards do not currently have per-step data-testids (only how-section / how-heading / how-cta). Adding data-testid=\"how-step-{n}\" on each card would make the spec literally testable; cards are present and visible.",
+    "(Optional) backend tests/test_blocked_dates_and_email.py uses os.environ[...] hard-required (KeyError if not set in shell). When run inside the supervisor backend env this works, but in the bare pytest env we had to export REACT_APP_BACKEND_URL manually. Consider falling back to the same pattern as test_backend_api.py (env.get with default) OR loading frontend/.env at top of the test module."
+  ],
+  "critical_code_review_comments": [
+    "server.py PATCH /api/admin/bookings/{id} — validation list and 404/400/401 paths look correct; status persisted via $set, response returns success+booking_status. Good.",
+    "whatsapp_service.py _is_configured() correctly treats values starting with 'PLACEHOLDER' as unconfigured. send_booking_whatsapp logs 'WHATSAPP not configured – skipping send' and returns None — non-blocking by design (verified via verify-payment which still confirmed booking).",
+    "server.py wraps both email and WhatsApp side-effects in try/except so neither can break the booking confirmation flow — exactly the right pattern.",
+    "AdminDashboard.jsx — status badge updates locally on success (good UX), and updateBookingStatus calls PATCH with bearer token; toast wording 'Marked {status} ✦' is consistent.",
+    "InstagramGrid uses data-testid=\"instagram-post-{i}\" (not ig-card-* as the spec described) — confirmed 6 cards render. Naming is fine; just a doc/spec mismatch.",
+    "BookingStatusUpdate Pydantic model could use Literal[...] for stricter typing instead of str + manual allowed-set check, but functionally equivalent."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration3_status_and_whatsapp.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 new + 24/24 regression)",
+    "frontend": "100% on iter-3 deltas tested"
+  },
+  "test_credentials": "Admin jenika / guidance@2026 verified working. Razorpay mock mode active (placeholder keys). WhatsApp env vars are PLACEHOLDER_* on purpose — verified the no-op skip path. Resend live but only delivers to verified guidance.angel7@gmail.com.",
+  "seed_data_creation": "Created and cleaned 5 TEST_ bookings during pytest run + 1 TEST_AdminUI booking during UI test (also cleaned). DB now has 0 bookings + 0 blocked dates.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 3 fully stable. Endpoint PATCH /api/admin/bookings/{id} with body {booking_status: 'pending'|'confirmed'|'completed'|'cancelled'|'no_show'}. WhatsApp no-op log signature: 'WHATSAPP not configured – skipping send' (em-dash, INFO level). Admin filter testids: filter-pay-{all|paid|pending|failed} and filter-status-{all|pending|confirmed|completed|cancelled|no_show}. Status dropdown trigger: status-dropdown-{bookingId}; menu items: status-set-{status}-{bookingId}. InstagramGrid card testids are instagram-post-{0..5} (NOT ig-card-*). HowItWorks does not yet expose per-step testids — only how-section / how-heading / how-cta.",
+  "rca of the issue": "N/A — no defects found in iteration 3 deltas. WhatsApp no-op behaviour validated by snapshotting backend log size before verify-payment and confirming the new chunk contains 'WHATSAPP not configured – skipping send' while the booking still flips to paid+confirmed."
+}
