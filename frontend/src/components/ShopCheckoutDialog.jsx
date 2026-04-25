@@ -206,6 +206,11 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
         toast.error("Payment SDK not loaded. Please refresh.");
         return;
       }
+      const isMobile =
+        typeof navigator !== "undefined" &&
+        /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+      const callbackUrl = `${window.location.origin}/payment-success?kind=order&id=${encodeURIComponent(order_id)}`;
+
       const options = {
         key: razorpay_key_id || RAZORPAY_KEY_ID,
         amount: amount_paise,
@@ -220,21 +225,25 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
         },
         notes: { order_id },
         theme: { color: "#6B5B95" },
-        handler: async function (response) {
-          try {
-            await axios.post(`${API}/orders/verify-payment`, {
-              order_id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
-            toast.success("Order placed ✦", {
-              description: "Check your email for confirmation.",
-            });
-          } catch (err) {
-            toast.error("Payment verification failed");
-          }
-        },
+        ...(isMobile
+          ? { redirect: true, callback_url: callbackUrl }
+          : {
+              handler: async function (response) {
+                try {
+                  await axios.post(`${API}/orders/verify-payment`, {
+                    order_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                  });
+                  toast.success("Order placed ✦", {
+                    description: "Check your email for confirmation.",
+                  });
+                } catch (err) {
+                  toast.error("Payment verification failed");
+                }
+              },
+            }),
         modal: {
           ondismiss: () => toast("Payment cancelled."),
         },

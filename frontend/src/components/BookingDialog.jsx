@@ -294,6 +294,11 @@ export default function BookingDialog({
         return;
       }
 
+      const isMobile =
+        typeof navigator !== "undefined" &&
+        /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+      const callbackUrl = `${window.location.origin}/payment-success?kind=booking&id=${encodeURIComponent(booking_id)}`;
+
       const options = {
         key: razorpay_key_id || RAZORPAY_KEY_ID,
         amount: amount_paise,
@@ -311,21 +316,27 @@ export default function BookingDialog({
           service: selectedService.name,
         },
         theme: { color: "#6B5B95" },
-        handler: async function (response) {
-          try {
-            await axios.post(`${API}/bookings/verify-payment`, {
-              booking_id,
-              razorpay_order_id: response.razorpay_order_id,
-              razorpay_payment_id: response.razorpay_payment_id,
-              razorpay_signature: response.razorpay_signature,
-            });
-            toast.success("Booking confirmed ✦", {
-              description: "Check your email for confirmation.",
-            });
-          } catch (err) {
-            toast.error("Payment verification failed");
-          }
-        },
+        // Mobile uses redirect mode for rock-solid UPI / GPay flow.
+        // Desktop keeps the inline modal for a slicker experience.
+        ...(isMobile
+          ? { redirect: true, callback_url: callbackUrl }
+          : {
+              handler: async function (response) {
+                try {
+                  await axios.post(`${API}/bookings/verify-payment`, {
+                    booking_id,
+                    razorpay_order_id: response.razorpay_order_id,
+                    razorpay_payment_id: response.razorpay_payment_id,
+                    razorpay_signature: response.razorpay_signature,
+                  });
+                  toast.success("Booking confirmed ✦", {
+                    description: "Check your email for confirmation.",
+                  });
+                } catch (err) {
+                  toast.error("Payment verification failed");
+                }
+              },
+            }),
         modal: {
           ondismiss: () => {
             toast("Payment cancelled. Your slot is reserved for 10 minutes.");
