@@ -64,6 +64,9 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
   const [step, setStep] = useState(0);
   const [cart, setCart] = useState([]); // [{ product, qty }]
   const [submitting, setSubmitting] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponInfo, setCouponInfo] = useState(null);
+  const [couponLoading, setCouponLoading] = useState(false);
   const [form, setForm] = useState({
     customer_name: "",
     customer_email: "",
@@ -97,8 +100,29 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
         country: "India",
         notes: "",
       });
+      setCouponCode("");
+      setCouponInfo(null);
     }
   }, [open, initialProduct]);
+
+  const applyCoupon = async () => {
+    if (!couponCode.trim() || cart.length === 0) return;
+    setCouponLoading(true);
+    try {
+      const res = await axios.post(`${API}/promotions/validate`, {
+        code: couponCode.trim().toUpperCase(),
+        kind: "products",
+        base_inr: total,
+      });
+      setCouponInfo(res.data);
+      toast.success(`Coupon applied — saved ₹${res.data.discount_inr.toLocaleString("en-IN")} ✦`);
+    } catch (e) {
+      setCouponInfo(null);
+      toast.error(e?.response?.data?.detail || "Invalid coupon");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
 
   const total = useMemo(
     () => cart.reduce((s, item) => s + (item.product.price_inr || 0) * item.qty, 0),
@@ -157,6 +181,7 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
           country: form.country.trim() || "India",
         },
         notes: form.notes.trim(),
+        coupon_code: couponInfo ? couponCode.trim().toUpperCase() : null,
       };
       const res = await axios.post(`${API}/orders/create-order`, payload);
       const { order_id, razorpay_order_id, amount_paise, is_mock, razorpay_key_id } = res.data;
@@ -474,12 +499,29 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
                     </div>
                   ))}
                 </div>
-                <div className="mt-5 pt-4 border-t-2 border-dashed border-[#EBB99A]/40 flex items-center justify-between">
-                  <div className="text-sm text-[#6B5B95] uppercase tracking-[0.2em] font-bold">
-                    Total
-                  </div>
-                  <div className="font-display text-3xl bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] bg-clip-text text-transparent">
-                    ₹{total.toLocaleString("en-IN")}
+                <div className="mt-5 pt-4 border-t-2 border-dashed border-[#EBB99A]/40 space-y-2.5">
+                  {couponInfo && (
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="text-emerald-700 inline-flex items-center gap-2">
+                        <Sparkles size={14} className="text-[#EBB99A]" />
+                        Coupon{" "}
+                        <span className="font-mono font-bold">
+                          {couponCode.toUpperCase()}
+                        </span>{" "}
+                        applied
+                      </div>
+                      <div className="text-emerald-700 font-medium">
+                        − ₹{couponInfo.discount_inr.toLocaleString("en-IN")}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-[#6B5B95] uppercase tracking-[0.2em] font-bold">
+                      {couponInfo ? "Final amount" : "Total"}
+                    </div>
+                    <div className="font-display text-3xl bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] bg-clip-text text-transparent">
+                      ₹{(couponInfo ? couponInfo.final_inr : total).toLocaleString("en-IN")}
+                    </div>
                   </div>
                 </div>
                 <div className="mt-5 pt-4 border-t border-[#EBB99A]/30 text-sm text-ink-plum/80 leading-relaxed">
@@ -507,6 +549,45 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
                   — UPI, cards, netbanking, wallets. You'll receive an email + WhatsApp confirmation immediately after payment.
                 </div>
               </div>
+
+              {!couponInfo && (
+                <div className="rounded-2xl bg-white border-2 border-dashed border-[#EBB99A]/50 px-5 py-4">
+                  <div className="text-[10px] uppercase tracking-[0.32em] text-[#D9A382] font-bold flex items-center gap-2">
+                    <Sparkles size={12} className="text-[#EBB99A]" /> Have a coupon?
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      data-testid="shop-coupon-input"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      placeholder="Enter code"
+                      className="flex-1 rounded-xl border-2 border-peach/40 bg-[#FBF4E8] px-3 py-2 text-ink-plum placeholder:text-ink-plum/40 focus:border-lavender-deep outline-none uppercase tracking-wider font-mono text-sm"
+                    />
+                    <button
+                      type="button"
+                      data-testid="shop-coupon-apply"
+                      disabled={!couponCode.trim() || couponLoading}
+                      onClick={applyCoupon}
+                      className="inline-flex items-center gap-1 bg-lavender-deep text-ivory rounded-xl px-4 py-2 text-sm font-medium hover:bg-lavender-deeper disabled:opacity-50"
+                    >
+                      {couponLoading ? <Loader2 className="animate-spin" size={14} /> : null}
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              )}
+              {couponInfo && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCouponInfo(null);
+                    setCouponCode("");
+                  }}
+                  className="text-xs text-ink-plum/60 hover:text-red-500 underline"
+                >
+                  Remove coupon
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -530,7 +611,7 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
               className="bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] hover:from-[#5A4C7E] hover:to-[#6B5B95] text-white rounded-full px-8 py-2.5 shadow-[0_8px_24px_-8px_rgba(107,91,149,0.6)] font-medium"
             >
               {submitting ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
-              Pay ₹{total.toLocaleString("en-IN")} ✦
+              Pay ₹{(couponInfo ? couponInfo.final_inr : total).toLocaleString("en-IN")} ✦
             </Button>
           ) : (
             <Button

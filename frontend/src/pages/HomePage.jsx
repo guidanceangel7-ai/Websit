@@ -16,6 +16,7 @@ import FAQ from "../components/FAQ";
 import Contact from "../components/Contact";
 import Footer from "../components/Footer";
 import BookingDialog from "../components/BookingDialog";
+import SpecialOfferBanner from "../components/SpecialOfferBanner";
 import { Toaster } from "../components/ui/sonner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -60,6 +61,7 @@ export default function HomePage() {
 
   return (
     <div className="min-h-screen bg-ivory text-ink-plum font-body">
+      <SpecialOfferBanner />
       <Header onBookNow={() => openBooking(null, null)} />
       <main>
         <Hero onBookNow={() => openBooking(null, null)} />

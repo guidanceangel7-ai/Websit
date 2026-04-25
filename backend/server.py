@@ -65,13 +65,14 @@ class BookingCreate(BaseModel):
     customer_name: str
     customer_email: EmailStr
     customer_phone: str
-    booking_date: Optional[str] = None  # ISO date string YYYY-MM-DD (required for live readings)
-    booking_slot: Optional[str] = None  # e.g., "10:00 AM"
+    booking_date: Optional[str] = None
+    booking_slot: Optional[str] = None
     birth_date: Optional[str] = None
     birth_time: Optional[str] = None
     birth_place: Optional[str] = None
     question: Optional[str] = None
     notes: Optional[str] = None
+    coupon_code: Optional[str] = None
 
 
 class Booking(BaseModel):
@@ -599,7 +600,42 @@ async def create_order(payload: BookingCreate):
             raise HTTPException(status_code=400, detail="booking_date and booking_slot are required for live readings")
 
     booking_id = str(uuid.uuid4())
-    amount_paise = service["price_inr"] * 100
+    base_inr = int(service["price_inr"])
+
+    # Apply auto + coupon discount
+    discount_inr = 0
+    applied_promo = None
+    code = (payload.coupon_code or "").strip().upper()
+    if code:
+        promo = await db.promotions.find_one({"code": code}, {"_id": 0})
+        if promo and _is_promo_live(promo) and _scope_matches(promo, "services", payload.service_id) \
+           and base_inr >= (promo.get("min_order_inr") or 0):
+            discount_inr = _apply_discount(promo, base_inr)
+            applied_promo = promo
+    if not applied_promo:
+        # Auto-applied promo (no code, active, banner or not) — pick highest applicable
+        autos = await db.promotions.find(
+            {"$or": [{"code": ""}, {"code": None}], "active": True}, {"_id": 0}
+        ).to_list(length=50)
+        best_disc = 0
+        best_promo = None
+        for p in autos:
+            if not _is_promo_live(p):
+                continue
+            if not _scope_matches(p, "services", payload.service_id):
+                continue
+            if base_inr < (p.get("min_order_inr") or 0):
+                continue
+            d = _apply_discount(p, base_inr)
+            if d > best_disc:
+                best_disc = d
+                best_promo = p
+        if best_promo:
+            discount_inr = best_disc
+            applied_promo = best_promo
+
+    final_inr = max(0, base_inr - discount_inr)
+    amount_paise = final_inr * 100
 
     if USE_MOCK_PAYMENT or razorpay_client is None:
         razorpay_order_id = f"order_mock_{uuid.uuid4().hex[:14]}"
@@ -622,7 +658,11 @@ async def create_order(payload: BookingCreate):
         "id": booking_id,
         "service_id": service["id"],
         "service_name": service["name"] + (f" ({service['duration_minutes']} min)" if service.get("duration_minutes") else ""),
-        "service_price_inr": service["price_inr"],
+        "service_price_inr": base_inr,
+        "discount_inr": discount_inr,
+        "final_price_inr": final_inr,
+        "applied_coupon_code": (applied_promo or {}).get("code") or None,
+        "applied_promo_id": (applied_promo or {}).get("id") or None,
         "customer_name": payload.customer_name,
         "customer_email": payload.customer_email,
         "customer_phone": payload.customer_phone,
@@ -690,6 +730,11 @@ async def verify_payment(payload: VerifyPayment):
         }}
     )
     updated = await db.bookings.find_one({"id": payload.booking_id}, {"_id": 0})
+    # Bump promo uses
+    if updated.get("applied_promo_id"):
+        await db.promotions.update_one(
+            {"id": updated["applied_promo_id"]}, {"$inc": {"uses": 1}}
+        )
     # Fire-and-forget email + WhatsApp confirmation (won't block / fail the response)
     try:
         email_id = await send_booking_confirmation(updated)
@@ -1049,6 +1094,7 @@ class OrderCreate(BaseModel):
     customer_phone: str
     address: ShippingAddress
     notes: Optional[str] = ""
+    coupon_code: Optional[str] = None
 
 
 class OrderItem(BaseModel):
@@ -1074,9 +1120,8 @@ class OrderStatusUpdate(BaseModel):
 async def orders_create(payload: OrderCreate):
     if not payload.items:
         raise HTTPException(status_code=400, detail="Cart is empty")
-    # Validate + price items from DB (don't trust client prices)
     items: List[dict] = []
-    total_paise = 0
+    subtotal_inr = 0
     for it in payload.items:
         product = await db.products.find_one({"id": it.product_id}, {"_id": 0})
         if not product:
@@ -1088,7 +1133,7 @@ async def orders_create(payload: OrderCreate):
         qty = max(1, int(it.quantity))
         unit = int(product["price_inr"])
         line_total = unit * qty
-        total_paise += line_total * 100
+        subtotal_inr += line_total
         items.append({
             "product_id": product["id"],
             "product_name": product["name"],
@@ -1096,6 +1141,40 @@ async def orders_create(payload: OrderCreate):
             "unit_price_inr": unit,
             "line_total_inr": line_total,
         })
+
+    # Apply discount
+    discount_inr = 0
+    applied_promo = None
+    code = (payload.coupon_code or "").strip().upper()
+    if code:
+        promo = await db.promotions.find_one({"code": code}, {"_id": 0})
+        if promo and _is_promo_live(promo) and _scope_matches(promo, "products") \
+           and subtotal_inr >= (promo.get("min_order_inr") or 0):
+            discount_inr = _apply_discount(promo, subtotal_inr)
+            applied_promo = promo
+    if not applied_promo:
+        autos = await db.promotions.find(
+            {"$or": [{"code": ""}, {"code": None}], "active": True}, {"_id": 0}
+        ).to_list(length=50)
+        best_disc = 0
+        best_promo = None
+        for p in autos:
+            if not _is_promo_live(p):
+                continue
+            if not _scope_matches(p, "products"):
+                continue
+            if subtotal_inr < (p.get("min_order_inr") or 0):
+                continue
+            d = _apply_discount(p, subtotal_inr)
+            if d > best_disc:
+                best_disc = d
+                best_promo = p
+        if best_promo:
+            discount_inr = best_disc
+            applied_promo = best_promo
+
+    final_inr = max(0, subtotal_inr - discount_inr)
+    total_paise = final_inr * 100
 
     order_id = str(uuid.uuid4())
     if USE_MOCK_PAYMENT or razorpay_client is None:
@@ -1118,7 +1197,11 @@ async def orders_create(payload: OrderCreate):
     doc = {
         "id": order_id,
         "items": items,
-        "total_inr": total_paise // 100,
+        "subtotal_inr": subtotal_inr,
+        "discount_inr": discount_inr,
+        "total_inr": final_inr,
+        "applied_coupon_code": (applied_promo or {}).get("code") or None,
+        "applied_promo_id": (applied_promo or {}).get("id") or None,
         "customer_name": payload.customer_name,
         "customer_email": payload.customer_email,
         "customer_phone": payload.customer_phone,
@@ -1139,6 +1222,10 @@ async def orders_create(payload: OrderCreate):
         "amount_paise": total_paise,
         "currency": "INR",
         "is_mock": is_mock,
+        "subtotal_inr": subtotal_inr,
+        "discount_inr": discount_inr,
+        "final_inr": final_inr,
+        "applied_coupon_code": (applied_promo or {}).get("code"),
     }
 
 
@@ -1176,6 +1263,10 @@ async def orders_verify(payload: OrderVerify):
         }},
     )
     updated = await db.orders.find_one({"id": payload.order_id}, {"_id": 0})
+    if updated.get("applied_promo_id"):
+        await db.promotions.update_one(
+            {"id": updated["applied_promo_id"]}, {"$inc": {"uses": 1}}
+        )
 
     # Best-effort confirmation emails
     try:
@@ -1206,6 +1297,148 @@ async def admin_update_order(
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Order not found")
     return {"success": True, "order_status": payload.order_status}
+
+
+# ============== Promotions / Coupons ==============
+class PromotionIn(BaseModel):
+    id: str
+    title: str
+    description: Optional[str] = ""
+    code: Optional[str] = ""  # blank = auto-applied (no code needed)
+    discount_type: str = "percent"  # percent | flat
+    discount_value: float = 0
+    scope: str = "site_wide"  # site_wide | products_only | services_only | specific
+    target_ids: List[str] = []  # used when scope=specific
+    min_order_inr: int = 0
+    max_uses: int = 0  # 0 = unlimited
+    uses: int = 0
+    active: bool = True
+    show_banner: bool = True
+    banner_text: Optional[str] = ""  # custom banner copy; falls back to title
+    starts_at: Optional[str] = None  # ISO date or datetime
+    ends_at: Optional[str] = None
+
+
+def _is_promo_live(promo: dict) -> bool:
+    if not promo.get("active"):
+        return False
+    if promo.get("max_uses") and promo.get("uses", 0) >= promo["max_uses"]:
+        return False
+    now = datetime.now(timezone.utc)
+    starts = promo.get("starts_at")
+    ends = promo.get("ends_at")
+    try:
+        if starts and datetime.fromisoformat(starts.replace("Z", "+00:00")) > now:
+            return False
+        if ends and datetime.fromisoformat(ends.replace("Z", "+00:00")) < now:
+            return False
+    except Exception:
+        pass
+    return True
+
+
+def _scope_matches(promo: dict, kind: str, target_id: Optional[str] = None) -> bool:
+    """kind: 'products' | 'services' | 'category-id' | 'product-id'."""
+    scope = promo.get("scope", "site_wide")
+    if scope == "site_wide":
+        return True
+    if scope == "products_only" and kind == "products":
+        return True
+    if scope == "services_only" and kind == "services":
+        return True
+    if scope == "specific" and target_id and target_id in (promo.get("target_ids") or []):
+        return True
+    return False
+
+
+def _apply_discount(promo: dict, base_inr: int) -> int:
+    """Return the discount amount (positive int) for a base in INR."""
+    dtype = promo.get("discount_type", "percent")
+    val = float(promo.get("discount_value") or 0)
+    if dtype == "percent":
+        return int(round(base_inr * val / 100))
+    return min(base_inr, int(val))
+
+
+@api_router.get("/promotions/active")
+async def public_active_promotions():
+    """Return active, banner-enabled promotions for the site banner."""
+    docs = await db.promotions.find({"active": True, "show_banner": True}, {"_id": 0}).to_list(length=20)
+    live = [p for p in docs if _is_promo_live(p)]
+    return live
+
+
+class CouponValidateIn(BaseModel):
+    code: str
+    kind: str = "services"  # services | products
+    base_inr: int
+    target_id: Optional[str] = None
+
+
+@api_router.post("/promotions/validate")
+async def public_validate_coupon(payload: CouponValidateIn):
+    code = (payload.code or "").strip().upper()
+    if not code:
+        raise HTTPException(status_code=400, detail="Coupon code is required")
+    promo = await db.promotions.find_one({"code": code}, {"_id": 0})
+    if not promo:
+        raise HTTPException(status_code=404, detail="Invalid coupon code")
+    if not _is_promo_live(promo):
+        raise HTTPException(status_code=400, detail="This coupon is not active")
+    if not _scope_matches(promo, payload.kind, payload.target_id):
+        raise HTTPException(status_code=400, detail="This coupon doesn't apply to this purchase")
+    if payload.base_inr < (promo.get("min_order_inr") or 0):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Minimum order ₹{promo.get('min_order_inr', 0):,} required",
+        )
+    discount = _apply_discount(promo, payload.base_inr)
+    return {
+        "valid": True,
+        "code": code,
+        "title": promo.get("title"),
+        "discount_inr": discount,
+        "final_inr": max(0, payload.base_inr - discount),
+        "discount_type": promo.get("discount_type"),
+        "discount_value": promo.get("discount_value"),
+    }
+
+
+# ----- Admin CRUD on promotions -----
+@api_router.get("/admin/promotions")
+async def admin_list_promotions(_admin: str = Depends(verify_admin)):
+    docs = await db.promotions.find({}, {"_id": 0}).sort("starts_at", -1).to_list(length=500)
+    return docs
+
+
+@api_router.post("/admin/promotions")
+async def admin_create_promotion(payload: PromotionIn, _admin: str = Depends(verify_admin)):
+    doc = payload.model_dump()
+    doc["code"] = (doc.get("code") or "").strip().upper()
+    if doc["code"]:
+        existing = await db.promotions.find_one({"code": doc["code"]})
+        if existing and existing.get("id") != doc["id"]:
+            raise HTTPException(status_code=409, detail="Coupon code already in use")
+    if await db.promotions.find_one({"id": doc["id"]}):
+        raise HTTPException(status_code=409, detail="Promotion id already exists")
+    await db.promotions.insert_one(doc)
+    return {"success": True}
+
+
+@api_router.put("/admin/promotions/{pid}")
+async def admin_update_promotion(pid: str, payload: PromotionIn, _admin: str = Depends(verify_admin)):
+    doc = payload.model_dump()
+    doc["code"] = (doc.get("code") or "").strip().upper()
+    res = await db.promotions.update_one({"id": pid}, {"$set": doc})
+    if res.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Promotion not found")
+    return {"success": True}
+
+
+@api_router.delete("/admin/promotions/{pid}")
+async def admin_delete_promotion(pid: str, _admin: str = Depends(verify_admin)):
+    res = await db.promotions.delete_one({"id": pid})
+    return {"success": True, "removed": res.deleted_count}
 
 
 # ============== Wire-up ==============

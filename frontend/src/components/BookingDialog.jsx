@@ -120,6 +120,9 @@ export default function BookingDialog({
   const [blockedDates, setBlockedDates] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponInfo, setCouponInfo] = useState(null); // {discount_inr, final_inr, title}
+  const [couponLoading, setCouponLoading] = useState(false);
 
   const [form, setForm] = useState({
     customer_name: "",
@@ -152,6 +155,8 @@ export default function BookingDialog({
       setDate(null);
       setSlot(null);
       setSlots([]);
+      setCouponCode("");
+      setCouponInfo(null);
       setForm({
         customer_name: "",
         customer_email: "",
@@ -225,6 +230,26 @@ export default function BookingDialog({
     if (step > 0) setStep(step - 1);
   };
 
+  const applyCoupon = async () => {
+    if (!couponCode.trim() || !selectedService) return;
+    setCouponLoading(true);
+    try {
+      const res = await axios.post(`${API}/promotions/validate`, {
+        code: couponCode.trim().toUpperCase(),
+        kind: "services",
+        base_inr: selectedService.price_inr,
+        target_id: selectedService.id,
+      });
+      setCouponInfo(res.data);
+      toast.success(`Coupon applied — saved ₹${res.data.discount_inr.toLocaleString("en-IN")} ✦`);
+    } catch (e) {
+      setCouponInfo(null);
+      toast.error(e?.response?.data?.detail || "Invalid coupon");
+    } finally {
+      setCouponLoading(false);
+    }
+  };
+
   const handlePay = async () => {
     if (!selectedService) return;
     setSubmitting(true);
@@ -241,6 +266,7 @@ export default function BookingDialog({
         birth_place: form.birth_place || null,
         question: form.question || null,
         notes: form.notes || null,
+        coupon_code: couponInfo ? couponCode.trim().toUpperCase() : null,
       };
       const res = await axios.post(`${API}/bookings/create-order`, payload);
       const { booking_id, razorpay_order_id, amount_paise, is_mock, razorpay_key_id } =
@@ -626,13 +652,75 @@ export default function BookingDialog({
                   </div>
                 </div>
 
-                <div className="mt-6 pt-5 border-t-2 border-dashed border-[#EBB99A]/40 flex items-center justify-between">
-                  <div className="text-sm text-[#6B5B95] uppercase tracking-[0.2em] font-bold">Total payable</div>
-                  <div className="font-display text-3xl bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] bg-clip-text text-transparent">
-                    ₹{selectedService?.price_inr?.toLocaleString("en-IN")}
+                <div className="mt-6 pt-5 border-t-2 border-dashed border-[#EBB99A]/40 space-y-3">
+                  {couponInfo && (
+                    <div className="flex items-center justify-between text-sm">
+                      <div className="text-emerald-700 inline-flex items-center gap-2">
+                        <Sparkles size={14} className="text-[#EBB99A]" />
+                        Coupon{" "}
+                        <span className="font-mono font-bold">
+                          {couponCode.toUpperCase()}
+                        </span>{" "}
+                        applied
+                      </div>
+                      <div className="text-emerald-700 font-medium">
+                        − ₹{couponInfo.discount_inr.toLocaleString("en-IN")}
+                      </div>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <div className="text-sm text-[#6B5B95] uppercase tracking-[0.2em] font-bold">
+                      {couponInfo ? "Final amount" : "Total payable"}
+                    </div>
+                    <div className="font-display text-3xl bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] bg-clip-text text-transparent">
+                      ₹
+                      {(couponInfo
+                        ? couponInfo.final_inr
+                        : selectedService?.price_inr || 0
+                      ).toLocaleString("en-IN")}
+                    </div>
                   </div>
                 </div>
               </div>
+
+              {!couponInfo && (
+                <div className="rounded-2xl bg-white border-2 border-dashed border-[#EBB99A]/50 px-5 py-4">
+                  <div className="text-[10px] uppercase tracking-[0.32em] text-[#D9A382] font-bold flex items-center gap-2">
+                    <Sparkles size={12} className="text-[#EBB99A]" /> Have a coupon?
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <input
+                      data-testid="booking-coupon-input"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                      placeholder="Enter code"
+                      className="flex-1 rounded-xl border-2 border-peach/40 bg-[#FBF4E8] px-3 py-2 text-ink-plum placeholder:text-ink-plum/40 focus:border-lavender-deep outline-none uppercase tracking-wider font-mono text-sm"
+                    />
+                    <button
+                      type="button"
+                      data-testid="booking-coupon-apply"
+                      disabled={!couponCode.trim() || couponLoading}
+                      onClick={applyCoupon}
+                      className="inline-flex items-center gap-1 bg-lavender-deep text-ivory rounded-xl px-4 py-2 text-sm font-medium hover:bg-lavender-deeper disabled:opacity-50"
+                    >
+                      {couponLoading ? <Loader2 className="animate-spin" size={14} /> : null}
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              )}
+              {couponInfo && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCouponInfo(null);
+                    setCouponCode("");
+                  }}
+                  className="text-xs text-ink-plum/60 hover:text-red-500 underline"
+                >
+                  Remove coupon
+                </button>
+              )}
 
               <div className="rounded-2xl bg-gradient-to-r from-[#EBB99A]/15 to-[#F4C6D6]/15 border-2 border-[#EBB99A]/30 px-5 py-4 text-sm text-[#3A2E5D]/85 flex items-start gap-3">
                 <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#EBB99A] to-[#F4C6D6] flex items-center justify-center text-white shrink-0">
@@ -667,7 +755,12 @@ export default function BookingDialog({
               {submitting ? (
                 <Loader2 className="animate-spin mr-2" size={16} />
               ) : null}
-              Pay ₹{selectedService?.price_inr?.toLocaleString("en-IN")} ✦
+              Pay ₹
+              {(couponInfo
+                ? couponInfo.final_inr
+                : selectedService?.price_inr || 0
+              ).toLocaleString("en-IN")}{" "}
+              ✦
             </Button>
           ) : (
             <Button
