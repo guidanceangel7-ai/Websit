@@ -122,7 +122,7 @@ export default function Hero({ onBookNow }) {
             initial={{ opacity: 0, scale: 0.92 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ duration: 0.9, delay: 0.2 }}
-            className="relative mx-auto w-full max-w-[480px]"
+            className="relative mx-auto w-[78%] sm:w-[70%] lg:w-full max-w-[480px]"
           >
             {/* Outer halo ring */}
             <div className="absolute -inset-6 rounded-full bg-gradient-to-br from-lilac/40 via-peach/30 to-blush/40 blur-2xl" />
@@ -134,11 +134,11 @@ export default function Hero({ onBookNow }) {
               />
             </div>
 
-            {/* Floating core-quality chips */}
+            {/* Floating core-quality chips — hidden on mobile (rendered as pills below) */}
             <motion.div
               animate={{ y: [0, -10, 0] }}
               transition={{ duration: 5, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute -left-6 sm:-left-10 top-10 glass-card rounded-2xl px-4 py-3 shadow-soft"
+              className="hidden lg:block absolute -left-12 top-6 glass-card rounded-2xl px-4 py-3 shadow-soft"
             >
               <div className="text-[10px] uppercase tracking-[0.22em] text-peach-deep font-bold">
                 ✦ Intuitive
@@ -151,7 +151,7 @@ export default function Hero({ onBookNow }) {
             <motion.div
               animate={{ y: [0, 10, 0] }}
               transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
-              className="absolute -right-4 sm:-right-8 bottom-12 glass-card rounded-2xl px-4 py-3 shadow-soft"
+              className="hidden lg:block absolute -right-10 bottom-8 glass-card rounded-2xl px-4 py-3 shadow-soft"
             >
               <div className="text-[10px] uppercase tracking-[0.22em] text-peach-deep font-bold">
                 ✦ Authentic
@@ -161,6 +161,22 @@ export default function Hero({ onBookNow }) {
               </div>
             </motion.div>
           </motion.div>
+
+          {/* Mobile / tablet — render the same qualities below the medallion as pills */}
+          <div className="lg:hidden mt-7 flex flex-wrap items-center justify-center gap-2.5 px-2">
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/85 backdrop-blur border border-peach/30 px-3.5 py-1.5 text-[11px] tracking-[0.18em] uppercase text-ink-plum shadow-soft">
+              <span className="text-peach-deep">✦</span>
+              <span className="font-bold text-peach-deep">Intuitive</span>
+              <span className="text-ink-plum/40">·</span>
+              <span className="font-display italic">Soul-led</span>
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-white/85 backdrop-blur border border-peach/30 px-3.5 py-1.5 text-[11px] tracking-[0.18em] uppercase text-ink-plum shadow-soft">
+              <span className="text-peach-deep">✦</span>
+              <span className="font-bold text-peach-deep">Authentic</span>
+              <span className="text-ink-plum/40">·</span>
+              <span className="font-display italic">Heart-led</span>
+            </span>
+          </div>
         </div>
       </div>
     </section>

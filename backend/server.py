@@ -579,6 +579,20 @@ async def available_slots(date_str: str):
         all_slots.append(cur.strftime("%I:%M %p").lstrip("0"))
         cur += step
 
+    # If user picked today (in IST), only keep slots that start at least
+    # MIN_LEAD_MINUTES from now — so past times never appear.
+    MIN_LEAD_MINUTES = 30
+    ist_now = datetime.now(timezone.utc) + timedelta(hours=5, minutes=30)
+    if d == ist_now.date():
+        cutoff_minutes = ist_now.hour * 60 + ist_now.minute + MIN_LEAD_MINUTES
+        future_slots = []
+        for slot_str in all_slots:
+            slot_dt = datetime.strptime(slot_str, "%I:%M %p")
+            slot_minutes_in_day = slot_dt.hour * 60 + slot_dt.minute
+            if slot_minutes_in_day >= cutoff_minutes:
+                future_slots.append(slot_str)
+        all_slots = future_slots
+
     # Block: paid bookings + pending bookings from the last RESERVATION minutes
     cutoff = (datetime.now(timezone.utc) - timedelta(minutes=SLOT_RESERVATION_MINUTES)).isoformat()
     booked = await db.bookings.find(
