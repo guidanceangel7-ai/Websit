@@ -117,10 +117,138 @@ function CategoryHeader({ cat, count }) {
   );
 }
 
+function CategoryCard({ cat, onOpen, index }) {
+  const count = (cat.products || []).length;
+  return (
+    <motion.button
+      type="button"
+      data-testid={`shop-cat-card-${cat.id}`}
+      onClick={() => onOpen(cat)}
+      initial={{ opacity: 0, y: 14 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-80px" }}
+      transition={{ duration: 0.5, delay: index * 0.08 }}
+      className="group text-left rounded-3xl bg-white border border-peach/30 overflow-hidden shadow-soft hover:-translate-y-1 hover:shadow-[0_22px_48px_-15px_rgba(107,91,149,0.28)] transition flex flex-col"
+    >
+      <div
+        className={`relative aspect-[5/3] flex items-center justify-center bg-gradient-to-br ${cat.accent || "from-[#C8B6E2] to-[#E6DDF1]"}`}
+      >
+        <div aria-hidden="true" className="absolute inset-0">
+          {Array.from({ length: 14 }).map((_, k) => {
+            const top = (k * 31) % 100;
+            const left = (k * 47) % 100;
+            const size = 7 + ((k * 5) % 9);
+            return (
+              <span
+                key={`cat-twinkle-${cat.id}-${k}`}
+                className="absolute opacity-70"
+                style={{
+                  top: `${top}%`,
+                  left: `${left}%`,
+                  animation: `twinkle ${3 + (k % 4)}s ease-in-out infinite`,
+                  animationDelay: `${(k % 5) * 0.3}s`,
+                }}
+              >
+                <Star size={size} color="#FBF4E8" />
+              </span>
+            );
+          })}
+        </div>
+        <div className="relative z-10 text-center px-6">
+          <div className="text-[10px] tracking-[0.32em] uppercase text-white/85 font-bold">
+            ✦ Collection
+          </div>
+          <div className="font-display italic text-3xl sm:text-4xl text-white mt-2 leading-tight">
+            {cat.name}
+          </div>
+        </div>
+      </div>
+      <div className="p-5 flex-1 flex flex-col">
+        {cat.description && (
+          <p className="text-sm text-ink-plum/70 line-clamp-2 leading-relaxed">
+            {cat.description}
+          </p>
+        )}
+        <div className="mt-auto pt-4 flex items-center justify-between gap-3">
+          <span className="text-[11px] tracking-[0.22em] uppercase text-peach-deep font-semibold">
+            {count} variant{count !== 1 ? "s" : ""}
+          </span>
+          <span className="inline-flex items-center gap-1.5 text-sm text-lavender-deep font-medium group-hover:gap-2.5 transition-all">
+            View all <ArrowRight size={14} />
+          </span>
+        </div>
+      </div>
+    </motion.button>
+  );
+}
+
+function CategoryDrawer({ category, open, onClose, onBuy }) {
+  if (!open || !category) return null;
+  const products = category.products || [];
+  return (
+    <div
+      data-testid="shop-cat-drawer"
+      className="fixed inset-0 z-[70] flex items-stretch justify-end bg-ink-plum/40 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="w-full sm:max-w-2xl bg-ivory shadow-[0_-20px_60px_rgba(58,46,93,0.25)] overflow-y-auto"
+      >
+        <div
+          className={`sticky top-0 z-10 px-6 sm:px-8 py-5 bg-gradient-to-br ${category.accent || "from-[#C8B6E2] to-[#E6DDF1]"} text-white`}
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] tracking-[0.32em] uppercase text-white/85 font-bold">
+                ✦ Collection
+              </div>
+              <h3 className="font-display italic text-3xl sm:text-4xl mt-1.5 leading-tight">
+                {category.name}
+              </h3>
+              {category.description && (
+                <p className="mt-2 text-sm text-white/90 leading-relaxed max-w-md">
+                  {category.description}
+                </p>
+              )}
+            </div>
+            <button
+              type="button"
+              data-testid="shop-cat-drawer-close"
+              onClick={onClose}
+              className="shrink-0 w-9 h-9 inline-flex items-center justify-center rounded-full bg-white/15 hover:bg-white/30 text-white"
+              aria-label="Close"
+            >
+              <span aria-hidden className="text-lg leading-none">×</span>
+            </button>
+          </div>
+        </div>
+        <div className="px-5 sm:px-8 py-6">
+          <div className="text-[11px] tracking-[0.22em] uppercase text-peach-deep font-semibold mb-4">
+            {products.length} variant{products.length !== 1 ? "s" : ""}
+          </div>
+          {products.length === 0 ? (
+            <div className="text-center py-12 text-ink-plum/60 italic">
+              No products in this collection yet.
+            </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 gap-4">
+              {products.map((p, i) => (
+                <ProductCard key={p.id} p={p} index={i} onBuy={onBuy} />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Shop() {
   const [categories, setCategories] = useState([]);
   const [tags, setTags] = useState([]);
   const [activeTag, setActiveTag] = useState(null);
+  const [drawerCat, setDrawerCat] = useState(null);
   const [open, setOpen] = useState(false);
   const [picked, setPicked] = useState(null);
 
@@ -305,21 +433,26 @@ export default function Shop() {
               )}
             </div>
           ) : (
-            categories.map((cat) =>
-              (cat.products || []).length === 0 ? null : (
-                <div key={cat.id}>
-                  <CategoryHeader cat={cat} count={cat.products.length} />
-                  <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {cat.products.map((p, i) => (
-                      <ProductCard key={p.id} p={p} index={i} onBuy={buyNow} />
-                    ))}
-                  </div>
-                </div>
-              )
-            )
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {categories.map((cat, i) => (
+                <CategoryCard
+                  key={cat.id}
+                  cat={cat}
+                  index={i}
+                  onOpen={(c) => setDrawerCat(c)}
+                />
+              ))}
+            </div>
           )}
         </div>
       </div>
+
+      <CategoryDrawer
+        category={drawerCat}
+        open={!!drawerCat}
+        onClose={() => setDrawerCat(null)}
+        onBuy={buyNow}
+      />
 
       <ShopCheckoutDialog
         open={open}
