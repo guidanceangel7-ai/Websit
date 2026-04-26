@@ -79,7 +79,7 @@ export default function Footer() {
             <a
               href={BRAND.instagram}
               target="_blank"
-              rel="noreferrer"
+              rel="noopener noreferrer"
               className="inline-flex items-center gap-2 text-ink-plum/75 hover:text-lavender-deep transition"
             >
               <Instagram size={14} /> @guidance_angel7
