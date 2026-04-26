@@ -1588,7 +1588,7 @@ def _normalize_product_images(doc: dict) -> dict:
 async def public_list_product_categories():
     """Return product categories with their nested products (for the Shop page)."""
     cats = await db.product_categories.find({}, {"_id": 0}).sort("order", 1).to_list(length=50)
-    products = await db.products.find({}, {"_id": 0}).sort("order", 1).to_list(length=500)
+ products = await db.products.find({}, {"_id": 0}).sort("order", 1).limit(100).to_list(100)
     products = [_normalize_product_images(p) for p in products]
     by_cat: dict[str, list] = {None: []}
     for p in products:
