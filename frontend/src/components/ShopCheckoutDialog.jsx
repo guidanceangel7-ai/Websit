@@ -209,7 +209,9 @@ export default function ShopCheckoutDialog({ open, onOpenChange, initialProduct 
       const isMobile =
         typeof navigator !== "undefined" &&
         /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
-      const callbackUrl = `${window.location.origin}/payment-success?kind=order&id=${encodeURIComponent(order_id)}`;
+      // Razorpay redirect-mode posts the signature to this URL. Backend route
+      // verifies + finalizes, then 303-redirects to /payment-success.
+      const callbackUrl = `${API}/orders/payment-callback?order_id=${encodeURIComponent(order_id)}`;
 
       const options = {
         key: razorpay_key_id || RAZORPAY_KEY_ID,

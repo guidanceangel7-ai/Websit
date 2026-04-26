@@ -1,6 +1,8 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request
+from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+import json
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import asyncio
@@ -42,6 +44,14 @@ if not USE_MOCK_PAYMENT:
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'jenika')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'guidance@2026')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'change-me')
+
+# Razorpay redirect / webhook config
+# FRONTEND_URL: absolute origin used to redirect users back from the backend
+# payment-callback to the SPA. Defaults to "" — when empty we issue a relative
+# redirect (`/payment-success?...`) which works whenever frontend & backend
+# share a domain (Emergent ingress, custom domains via the same proxy).
+FRONTEND_URL = os.environ.get('FRONTEND_URL', '').rstrip('/')
+RAZORPAY_WEBHOOK_SECRET = os.environ.get('RAZORPAY_WEBHOOK_SECRET', '')
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
@@ -794,29 +804,55 @@ async def verify_payment(payload: VerifyPayment):
             )
             raise HTTPException(status_code=400, detail="Signature verification failed")
 
+    updated = await _finalize_booking_payment(payload.booking_id, payload.razorpay_payment_id)
+    return {"success": True, "booking": updated, "is_mock": is_mock}
+
+
+def _verify_razorpay_signature(order_id: str, payment_id: str, signature: str) -> bool:
+    """HMAC-SHA256 check used for Razorpay client-side checkout signatures."""
+    if not signature:
+        return False
+    body = f"{order_id}|{payment_id}"
+    expected = hmac.new(
+        RAZORPAY_KEY_SECRET.encode(),
+        body.encode(),
+        hashlib.sha256,
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature)
+
+
+async def _finalize_booking_payment(booking_id: str, razorpay_payment_id: str):
+    """Idempotent: marks the booking paid, bumps promo uses, fires emails/WA in BG.
+
+    Used by /bookings/verify-payment, /bookings/payment-callback (mobile redirect)
+    and /razorpay/webhook (out-of-band reconciliation).
+    """
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not booking:
+        return None
+    if booking.get("payment_status") == "paid":
+        return booking  # already finalized — no-op (idempotent)
+
     await db.bookings.update_one(
-        {"id": payload.booking_id},
+        {"id": booking_id},
         {"$set": {
-            "razorpay_payment_id": payload.razorpay_payment_id,
+            "razorpay_payment_id": razorpay_payment_id,
             "payment_status": "paid",
             "booking_status": "confirmed",
-        }}
+        }},
     )
-    updated = await db.bookings.find_one({"id": payload.booking_id}, {"_id": 0})
-    # Bump promo uses
+    updated = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
     if updated.get("applied_promo_id"):
         await db.promotions.update_one(
             {"id": updated["applied_promo_id"]}, {"$inc": {"uses": 1}}
         )
-    # Truly fire-and-forget — don't block the API response while emails / WhatsApp
-    # round-trip to Resend / Twilio (those add 2-5 sec on slow networks).
-    async def _post_payment_notify(booking_id: str, doc: dict):
+
+    async def _notify(bid: str, doc: dict):
         try:
             email_id = await send_booking_confirmation(doc)
             if email_id:
                 await db.bookings.update_one(
-                    {"id": booking_id},
-                    {"$set": {"confirmation_email_id": email_id}},
+                    {"id": bid}, {"$set": {"confirmation_email_id": email_id}}
                 )
         except Exception as e:
             logger.warning(f"Booking email send failed (background): {e}")
@@ -824,14 +860,102 @@ async def verify_payment(payload: VerifyPayment):
             wa_id = await send_booking_whatsapp(doc)
             if wa_id:
                 await db.bookings.update_one(
-                    {"id": booking_id},
-                    {"$set": {"confirmation_whatsapp_id": wa_id}},
+                    {"id": bid}, {"$set": {"confirmation_whatsapp_id": wa_id}}
                 )
         except Exception as e:
             logger.warning(f"Booking WhatsApp failed (background): {e}")
 
-    asyncio.create_task(_post_payment_notify(payload.booking_id, updated))
-    return {"success": True, "booking": updated, "is_mock": is_mock}
+    asyncio.create_task(_notify(booking_id, updated))
+    return updated
+
+
+async def _finalize_order_payment(order_id: str, razorpay_payment_id: str):
+    """Idempotent shop-order finalize counterpart of `_finalize_booking_payment`."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        return None
+    if order.get("payment_status") == "paid":
+        return order
+
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "razorpay_payment_id": razorpay_payment_id,
+            "payment_status": "paid",
+            "order_status": "confirmed",
+        }},
+    )
+    updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if updated.get("applied_promo_id"):
+        await db.promotions.update_one(
+            {"id": updated["applied_promo_id"]}, {"$inc": {"uses": 1}}
+        )
+
+    async def _notify(oid: str, doc: dict):
+        try:
+            await send_order_confirmation(doc)
+        except Exception as e:
+            logger.warning(f"Order email failed (background): {e}")
+        try:
+            wa_id = await send_order_whatsapp(doc)
+            if wa_id:
+                await db.orders.update_one(
+                    {"id": oid}, {"$set": {"confirmation_whatsapp_id": wa_id}}
+                )
+        except Exception as e:
+            logger.warning(f"Order WhatsApp failed (background): {e}")
+
+    asyncio.create_task(_notify(order_id, updated))
+    return updated
+
+
+def _redirect_to_spa(kind: str, local_id: str, status: str, reason: str = ""):
+    """303-redirect the user from a backend POST callback back to the SPA.
+
+    When FRONTEND_URL is set we use an absolute URL; otherwise we issue a
+    relative redirect, which works whenever the SPA is served from the same
+    origin as the API (Emergent ingress, custom domains via the same proxy).
+    """
+    base = FRONTEND_URL or ""
+    qs = f"kind={kind}&id={local_id}&status={status}"
+    if reason:
+        qs += f"&reason={reason}"
+    return RedirectResponse(url=f"{base}/payment-success?{qs}", status_code=303)
+
+
+@api_router.post("/bookings/payment-callback")
+async def bookings_payment_callback(request: Request):
+    """Razorpay 'redirect mode' lands here via a server POST after checkout.
+
+    Razorpay submits a `application/x-www-form-urlencoded` body containing
+    `razorpay_order_id`, `razorpay_payment_id`, `razorpay_signature`. We verify
+    the signature, finalize the booking, then 303-redirect the user back to
+    the SPA so they see the friendly confirmation page.
+    """
+    form = await request.form()
+    booking_id = request.query_params.get("booking_id") or form.get("booking_id") or ""
+    rzp_order_id = form.get("razorpay_order_id") or ""
+    rzp_payment_id = form.get("razorpay_payment_id") or ""
+    rzp_signature = form.get("razorpay_signature") or ""
+
+    if not booking_id or not rzp_order_id:
+        return _redirect_to_spa("booking", booking_id, "error", "missing-params")
+
+    booking = await db.bookings.find_one({"id": booking_id}, {"_id": 0})
+    if not booking:
+        return _redirect_to_spa("booking", booking_id, "error", "not-found")
+    if booking.get("razorpay_order_id") != rzp_order_id:
+        return _redirect_to_spa("booking", booking_id, "error", "order-mismatch")
+
+    is_mock = booking.get("is_mock_payment", False) or USE_MOCK_PAYMENT
+    if not is_mock and not _verify_razorpay_signature(rzp_order_id, rzp_payment_id, rzp_signature):
+        await db.bookings.update_one(
+            {"id": booking_id}, {"$set": {"payment_status": "failed"}}
+        )
+        return _redirect_to_spa("booking", booking_id, "failed", "bad-signature")
+
+    await _finalize_booking_payment(booking_id, rzp_payment_id)
+    return _redirect_to_spa("booking", booking_id, "ok")
 
 
 # ============== Admin Endpoints ==============
@@ -1778,53 +1902,107 @@ async def orders_verify(payload: OrderVerify):
 
     is_mock = order.get("is_mock_payment", False) or USE_MOCK_PAYMENT
     if not is_mock:
-        if not payload.razorpay_signature:
-            raise HTTPException(status_code=400, detail="Signature required")
-        body = f"{payload.razorpay_order_id}|{payload.razorpay_payment_id}"
-        expected = hmac.new(
-            RAZORPAY_KEY_SECRET.encode(),
-            body.encode(),
-            hashlib.sha256,
-        ).hexdigest()
-        if not hmac.compare_digest(expected, payload.razorpay_signature):
+        if not _verify_razorpay_signature(
+            payload.razorpay_order_id,
+            payload.razorpay_payment_id,
+            payload.razorpay_signature or "",
+        ):
             await db.orders.update_one(
                 {"id": payload.order_id},
                 {"$set": {"payment_status": "failed"}},
             )
             raise HTTPException(status_code=400, detail="Signature verification failed")
 
-    await db.orders.update_one(
-        {"id": payload.order_id},
-        {"$set": {
-            "razorpay_payment_id": payload.razorpay_payment_id,
-            "payment_status": "paid",
-            "order_status": "confirmed",
-        }},
-    )
-    updated = await db.orders.find_one({"id": payload.order_id}, {"_id": 0})
-    if updated.get("applied_promo_id"):
-        await db.promotions.update_one(
-            {"id": updated["applied_promo_id"]}, {"$inc": {"uses": 1}}
-        )
-
-    # Truly fire-and-forget confirmation notifications.
-    async def _notify_order(order_id: str, doc: dict):
-        try:
-            await send_order_confirmation(doc)
-        except Exception as e:
-            logger.warning(f"Order email failed (background): {e}")
-        try:
-            wa_id = await send_order_whatsapp(doc)
-            if wa_id:
-                await db.orders.update_one(
-                    {"id": order_id},
-                    {"$set": {"confirmation_whatsapp_id": wa_id}},
-                )
-        except Exception as e:
-            logger.warning(f"Order WhatsApp failed (background): {e}")
-
-    asyncio.create_task(_notify_order(payload.order_id, updated))
+    updated = await _finalize_order_payment(payload.order_id, payload.razorpay_payment_id)
     return {"success": True, "order": updated, "is_mock": is_mock}
+
+
+@api_router.post("/orders/payment-callback")
+async def orders_payment_callback(request: Request):
+    """Razorpay 'redirect mode' callback for shop orders. See booking variant."""
+    form = await request.form()
+    order_id = request.query_params.get("order_id") or form.get("order_id") or ""
+    rzp_order_id = form.get("razorpay_order_id") or ""
+    rzp_payment_id = form.get("razorpay_payment_id") or ""
+    rzp_signature = form.get("razorpay_signature") or ""
+
+    if not order_id or not rzp_order_id:
+        return _redirect_to_spa("order", order_id, "error", "missing-params")
+
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        return _redirect_to_spa("order", order_id, "error", "not-found")
+    if order.get("razorpay_order_id") != rzp_order_id:
+        return _redirect_to_spa("order", order_id, "error", "order-mismatch")
+
+    is_mock = order.get("is_mock_payment", False) or USE_MOCK_PAYMENT
+    if not is_mock and not _verify_razorpay_signature(rzp_order_id, rzp_payment_id, rzp_signature):
+        await db.orders.update_one(
+            {"id": order_id}, {"$set": {"payment_status": "failed"}}
+        )
+        return _redirect_to_spa("order", order_id, "failed", "bad-signature")
+
+    await _finalize_order_payment(order_id, rzp_payment_id)
+    return _redirect_to_spa("order", order_id, "ok")
+
+
+@api_router.post("/razorpay/webhook")
+async def razorpay_webhook(request: Request):
+    """Out-of-band reconciliation. Razorpay POSTs `payment.captured` / `.authorized`
+    events and we mirror them onto our local DB. Idempotent — the underlying
+    finalize helpers no-op when the booking/order is already `paid`.
+
+    Configure in Razorpay Dashboard → Webhooks. Set RAZORPAY_WEBHOOK_SECRET in
+    the backend env. Subscribe at minimum to `payment.captured`.
+    """
+    body_bytes = await request.body()
+    sig = request.headers.get("x-razorpay-signature", "")
+
+    if not RAZORPAY_WEBHOOK_SECRET:
+        # Don't 500 — just log so Razorpay's retries don't pile up before the
+        # user has configured the secret in their env.
+        logger.warning("RAZORPAY_WEBHOOK_SECRET not configured; ignoring webhook")
+        return {"ok": False, "reason": "not-configured"}
+
+    expected = hmac.new(
+        RAZORPAY_WEBHOOK_SECRET.encode(), body_bytes, hashlib.sha256
+    ).hexdigest()
+    if not hmac.compare_digest(expected, sig):
+        raise HTTPException(status_code=400, detail="Invalid webhook signature")
+
+    try:
+        payload = json.loads(body_bytes)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid JSON")
+
+    event = payload.get("event", "")
+    if event not in ("payment.captured", "payment.authorized"):
+        return {"ok": True, "ignored": event}
+
+    payment = (
+        payload.get("payload", {}).get("payment", {}).get("entity", {}) or {}
+    )
+    rzp_order_id = payment.get("order_id")
+    rzp_payment_id = payment.get("id")
+    if not rzp_order_id or not rzp_payment_id:
+        return {"ok": True, "ignored": "missing-ids"}
+
+    booking = await db.bookings.find_one(
+        {"razorpay_order_id": rzp_order_id}, {"_id": 0}
+    )
+    if booking:
+        await _finalize_booking_payment(booking["id"], rzp_payment_id)
+        return {"ok": True, "kind": "booking", "id": booking["id"]}
+
+    order = await db.orders.find_one(
+        {"razorpay_order_id": rzp_order_id}, {"_id": 0}
+    )
+    if order:
+        await _finalize_order_payment(order["id"], rzp_payment_id)
+        return {"ok": True, "kind": "order", "id": order["id"]}
+
+    logger.info(f"Webhook received for unknown rzp order {rzp_order_id}")
+    return {"ok": True, "ignored": "unknown-order"}
 
 
 @api_router.get("/admin/orders")

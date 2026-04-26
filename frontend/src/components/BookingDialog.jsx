@@ -297,7 +297,11 @@ export default function BookingDialog({
       const isMobile =
         typeof navigator !== "undefined" &&
         /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
-      const callbackUrl = `${window.location.origin}/payment-success?kind=booking&id=${encodeURIComponent(booking_id)}`;
+      // IMPORTANT: Razorpay's redirect-mode `callback_url` receives the payment
+      // signature via a server-to-server **POST**. SPAs can't accept POSTs, so
+      // we point it at our FastAPI route which verifies the signature, finalizes
+      // the booking, and 303-redirects the customer back to /payment-success.
+      const callbackUrl = `${API}/bookings/payment-callback?booking_id=${encodeURIComponent(booking_id)}`;
 
       const options = {
         key: razorpay_key_id || RAZORPAY_KEY_ID,

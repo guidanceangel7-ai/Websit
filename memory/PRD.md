@@ -70,6 +70,34 @@
 
 ## Recent Changes (this session)
 
+**2026-04-26** — Razorpay redirect-mode callback + webhook (P0 fix):
+1. **Backend** — Added two new endpoints in `server.py`:
+   - `POST /api/bookings/payment-callback` — accepts Razorpay's
+     `application/x-www-form-urlencoded` POST, verifies HMAC-SHA256 signature,
+     finalizes the booking (paid + confirmed, bumps promo uses, fires
+     email/WhatsApp), then 303-redirects the customer to
+     `/payment-success?kind=booking&id=<id>&status=ok`.
+   - `POST /api/orders/payment-callback` — same flow for shop orders.
+   - `POST /api/razorpay/webhook` — out-of-band reconciliation. Verifies the
+     `x-razorpay-signature` header against `RAZORPAY_WEBHOOK_SECRET` and
+     finalizes whichever booking/order matches the `razorpay_order_id` from
+     the `payment.captured` / `payment.authorized` event.
+2. Extracted `_finalize_booking_payment` and `_finalize_order_payment` helpers
+   so the verify-payment route, the new redirect callback, and the webhook
+   share one idempotent finalize path (a re-fire is a safe no-op).
+3. **Frontend** — `BookingDialog.jsx` and `ShopCheckoutDialog.jsx` now point
+   `callback_url` at the FastAPI route instead of the SPA route. The SPA
+   `PaymentSuccess.jsx` now reads `?status=ok|failed|error&reason=...` and
+   shows the matching state immediately (legacy razorpay_* params still work
+   as a fallback).
+4. **New env var** — `RAZORPAY_WEBHOOK_SECRET` (optional). When unset, the
+   webhook returns `{ok:false,reason:not-configured}` instead of crashing.
+   `FRONTEND_URL` (optional) overrides the redirect target when frontend and
+   backend live on different domains.
+5. Validated end-to-end via curl: missing-params → 303 error, mock booking
+   happy path → paid/confirmed, idempotent re-fire → no double notify, order
+   callback parity, webhook signature pass + fail.
+
 **2026-04-25 (later)** — Visible promo codes during checkout:
 1. Created reusable `AvailableOffers` component that fetches `/api/promotions/active`,
    filters by `kind` (services / products), and shows each code prominently with
@@ -96,6 +124,9 @@
 5. Verified end-to-end via curl: create-product-with-category → public `/api/product-categories` reflects it instantly.
 
 ## Next Tasks
-1. (P0) Plug live Razorpay keys in `/app/backend/.env` (and frontend `RAZORPAY_KEY_ID`)
-2. (P1) Activate WhatsApp via Meta Cloud API (need access token + phone number ID)
-3. (P1) CSV export endpoints + buttons in admin
+1. (P1) Set `RAZORPAY_WEBHOOK_SECRET` in Emergent Deployment env + add
+   `https://guidanceangel7.com/api/razorpay/webhook` in Razorpay Dashboard →
+   Webhooks (subscribe at minimum to `payment.captured`).
+2. (P1) Re-enable Twilio WhatsApp once Meta sender approved.
+3. (P2) Admin "Pending follow-up" badge for bookings >30 min still pending.
+4. (P2) Razorpay Magic Checkout for higher mobile conversion.

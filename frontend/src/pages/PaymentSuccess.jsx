@@ -6,11 +6,15 @@ import { Loader2, CheckCircle2, XCircle, ArrowRight } from "lucide-react";
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 /**
- * Razorpay redirects here with query params after a payment attempt.
- *   ?razorpay_order_id=...&razorpay_payment_id=...&razorpay_signature=...
- *   &kind=booking|order&id=<booking_id|order_id>
+ * Razorpay redirects mobile customers back here after our backend
+ * /api/{bookings|orders}/payment-callback endpoint has verified the signature
+ * and finalized the booking/order. The backend appends:
  *
- * The page calls the matching verify-payment endpoint and shows a confirmation.
+ *   /payment-success?kind=booking|order&id=<id>&status=ok|failed|error&reason=<...>
+ *
+ * Legacy fallback: if the page is hit with raw razorpay_* query params (e.g.
+ * an older client that still uses client-side `callback_url`), we run the
+ * old client-side verify so existing pending links keep working.
  */
 export default function PaymentSuccess() {
   const [params] = useSearchParams();
@@ -19,6 +23,35 @@ export default function PaymentSuccess() {
 
   useEffect(() => {
     const kind = params.get("kind") || "booking";
+    const status = params.get("status");
+    const reason = params.get("reason");
+
+    // ✦ New flow: backend has already verified + finalized. Just render UI.
+    if (status) {
+      if (status === "ok") {
+        setState({
+          loading: false,
+          ok: true,
+          message:
+            kind === "order"
+              ? "Your sacred-shop order is confirmed. A confirmation email is on its way ✦"
+              : "Your booking is confirmed. A confirmation email is on its way ✦",
+        });
+      } else {
+        const friendly =
+          reason === "bad-signature"
+            ? "We couldn't verify the payment signature. If money was deducted, we'll reconcile it within minutes."
+            : reason === "not-found"
+            ? "We couldn't find this booking on our side."
+            : reason === "order-mismatch"
+            ? "The payment didn't match the original order."
+            : "We received your payment but couldn't auto-confirm it. Please WhatsApp us — we'll reconcile within minutes.";
+        setState({ loading: false, ok: false, message: friendly });
+      }
+      return;
+    }
+
+    // ✦ Legacy fallback (client-side verify with razorpay_* in the URL).
     const localId = params.get("id");
     const rzpOrderId = params.get("razorpay_order_id");
     const rzpPaymentId = params.get("razorpay_payment_id");
@@ -75,7 +108,10 @@ export default function PaymentSuccess() {
   }, [params]);
 
   return (
-    <div className="min-h-screen bg-ivory text-ink-plum font-body flex items-center justify-center px-6 py-10">
+    <div
+      data-testid="payment-success-page"
+      className="min-h-screen bg-ivory text-ink-plum font-body flex items-center justify-center px-6 py-10"
+    >
       <div className="w-full max-w-lg rounded-3xl bg-white border border-peach/30 shadow-[0_20px_50px_-15px_rgba(58,46,93,0.25)] p-8 sm:p-10 text-center">
         {state.loading ? (
           <>
@@ -96,6 +132,7 @@ export default function PaymentSuccess() {
         ) : state.ok ? (
           <>
             <CheckCircle2
+              data-testid="payment-success-confirmed"
               className="mx-auto text-lavender-deep mb-4"
               size={48}
             />
@@ -110,6 +147,7 @@ export default function PaymentSuccess() {
             </p>
             <button
               type="button"
+              data-testid="payment-success-home-btn"
               onClick={() => navigate("/")}
               className="mt-6 inline-flex items-center gap-2 rounded-full bg-lavender-deep text-ivory px-5 py-2.5 text-sm hover:bg-lavender-deeper"
             >
@@ -118,7 +156,11 @@ export default function PaymentSuccess() {
           </>
         ) : (
           <>
-            <XCircle className="mx-auto text-rose-500 mb-4" size={48} />
+            <XCircle
+              data-testid="payment-success-failed"
+              className="mx-auto text-rose-500 mb-4"
+              size={48}
+            />
             <div className="text-[10px] tracking-[0.32em] uppercase text-rose-500 font-bold">
               ✦ Needs attention
             </div>
