@@ -956,7 +956,6 @@ async def bookings_payment_callback(request: Request):
 
     await _finalize_booking_payment(booking_id, rzp_payment_id)
     return _redirect_to_spa("booking", booking_id, "ok")
-return _redirect_to_spa("booking", booking_id, "ok")
 
 
 # ✅ 👉 PASTE HERE (line ~959)
