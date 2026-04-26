@@ -1585,28 +1585,20 @@ def _normalize_product_images(doc: dict) -> dict:
 
 # ----- Public product category endpoints -----
 
-@api_router.get("/product-categories")
-async def public_list_product_categories():
-    # Step 1: get categories
-    cats = await db.product_categories.find({}, {"_id": 0}).to_list(50)
+@api_router.get("/products")
+async def public_list_products(page: int = 1, limit: int = 20):
+    limit = min(limit, 50)
+    page = max(page, 1)
 
-    # Step 2: get LIMITED products (NO SORT)
-    products = await db.products.find({}, {"_id": 0}).limit(50).to_list(50)
+    skip = (page - 1) * limit
 
-    # Step 3: group products by category
-    by_cat = {}
+    docs = await db.products.find({}, {"_id": 0}) \
+        .sort("order", 1) \
+        .skip(skip) \
+        .limit(limit) \
+        .to_list(length=limit)
 
-    for p in products:
-        cat_id = p.get("product_category_id")
-        if cat_id not in by_cat:
-            by_cat[cat_id] = []
-        by_cat[cat_id].append(p)
-
-    # Step 4: attach products to categories
-    for c in cats:
-        c["products"] = by_cat.get(c.get("id"), [])
-
-    return cats
+    return [_normalize_product_images(d) for d in docs]
 
 
 # ----- Admin product category CRUD -----
