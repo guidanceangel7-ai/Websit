@@ -11,7 +11,7 @@ const PRESS = [
   "Mid Day",
   "Cosmopolitan",
   "Mirror",
-  "Filmfare",
+  "CEO Weekly"
 ];
 
 export default function PressStrip() {
