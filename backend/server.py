@@ -1584,21 +1584,30 @@ def _normalize_product_images(doc: dict) -> dict:
 
 
 # ----- Public product category endpoints -----
+
 @api_router.get("/product-categories")
 async def public_list_product_categories():
     """Return product categories with their nested products (for the Shop page)."""
+    
     cats = await db.product_categories.find({}, {"_id": 0}).sort("order", 1).to_list(length=50)
- products = await db.products.find({}, {"_id": 0}).sort("order", 1).limit(100).to_list(100)
+    
+    products = await db.products.find({}, {"_id": 0}).sort("order", 1).limit(100).to_list(100)
+    
     products = [_normalize_product_images(p) for p in products]
+    
     by_cat: dict[str, list] = {None: []}
+    
     for p in products:
         by_cat.setdefault(p.get("product_category_id"), []).append(p)
+    
     for c in cats:
         c["products"] = by_cat.get(c["id"], [])
+    
     # Append uncategorised under a virtual bucket
     uncategorised = by_cat.get(None, []) + [
         p for k, lst in by_cat.items() if k and k not in {c["id"] for c in cats} for p in lst
     ]
+    
     if uncategorised:
         cats.append({
             "id": "_uncategorised",
@@ -1609,6 +1618,7 @@ async def public_list_product_categories():
             "order": 9999,
             "products": uncategorised,
         })
+    
     return cats
 
 
