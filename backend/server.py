@@ -956,7 +956,47 @@ async def bookings_payment_callback(request: Request):
 
     await _finalize_booking_payment(booking_id, rzp_payment_id)
     return _redirect_to_spa("booking", booking_id, "ok")
+return _redirect_to_spa("booking", booking_id, "ok")
 
+
+# ✅ 👉 PASTE HERE (line ~959)
+
+@app.post("/razorpay/webhook")
+async def razorpay_webhook(request: Request):
+    body = await request.body()
+    signature = request.headers.get("x-razorpay-signature")
+
+    secret = os.getenv("RAZORPAY_WEBHOOK_SECRET")
+
+    expected_signature = hmac.new(
+        secret.encode(),
+        body,
+        hashlib.sha256
+    ).hexdigest()
+
+    if not hmac.compare_digest(expected_signature, signature):
+        return {"status": "invalid signature"}
+
+    data = await request.json()
+
+    if data.get("event") == "payment.captured":
+        payment = data["payload"]["payment"]["entity"]
+
+        order_id = payment.get("order_id")
+        payment_id = payment.get("id")
+
+        booking = await db.bookings.find_one(
+            {"razorpay_order_id": order_id},
+            {"_id": 0}
+        )
+
+        if booking:
+            await _finalize_booking_payment(
+                booking["id"],
+                payment_id
+            )
+
+    return {"status": "ok"}
 
 # ============== Admin Endpoints ==============
 @api_router.post("/admin/login")
