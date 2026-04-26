@@ -12,6 +12,7 @@ import Services from "../components/Services";
 import Shop from "../components/Shop";
 import Testimonials from "../components/Testimonials";
 import InstagramGrid from "../components/InstagramGrid";
+import YouTubeGrid from "../components/YouTubeGrid"; // ✅ ADDED
 import FAQ from "../components/FAQ";
 import Contact from "../components/Contact";
 import Footer from "../components/Footer";
@@ -40,7 +41,7 @@ export default function HomePage() {
         if (!alive) return;
         const cats = c.data || [];
         setCategories(cats);
-        // Flatten services for booking dialog
+
         const flat = cats.flatMap((cat) => cat.services || []);
         setServices(flat);
         setTestimonials(t.data || []);
@@ -63,6 +64,7 @@ export default function HomePage() {
     <div className="min-h-screen bg-ivory text-ink-plum font-body">
       <SpecialOfferBanner />
       <Header onBookNow={() => openBooking(null, null)} />
+
       <main style={{ paddingTop: "var(--banner-h, 0px)" }}>
         <Hero onBookNow={() => openBooking(null, null)} />
         <HeroMarquee />
@@ -71,17 +73,25 @@ export default function HomePage() {
         <Gallery />
         <WhyJenika />
         <HowItWorks onBookNow={() => openBooking(null, null)} />
+
         <Services
           categories={categories}
           onSelect={(s) => openBooking(s)}
         />
+
         <Shop />
         <Testimonials items={testimonials} />
+
+        {/* ✅ SOCIAL SECTION */}
         <InstagramGrid />
+        <YouTubeGrid /> {/* ⭐ THIS WAS MISSING */}
+
         <FAQ />
         <Contact onBookNow={() => openBooking(null, null)} />
       </main>
+
       <Footer />
+
       <BookingDialog
         open={bookingOpen}
         onOpenChange={setBookingOpen}
@@ -90,6 +100,7 @@ export default function HomePage() {
         categories={categories}
         services={services}
       />
+
       <Toaster richColors position="top-center" />
     </div>
   );
