@@ -1587,38 +1587,7 @@ def _normalize_product_images(doc: dict) -> dict:
 
 @api_router.get("/product-categories")
 async def public_list_product_categories():
-    cats = await db.product_categories.find({}, {"_id": 0}).sort("order", 1).to_list(length=50)
-    
-    products = await db.products.find({}, {"_id": 0}).sort("order", 1).limit(100).to_list(100)
-    
-    products = [_normalize_product_images(p) for p in products]
-    
-    by_cat: dict[str, list] = {None: []}
-    
-    for p in products:
-        by_cat.setdefault(p.get("product_category_id"), []).append(p)
-    
-    for c in cats:
-        cat_id = c.get("id")
-        c["products"] = by_cat.get(cat_id, [])
-    
-    uncategorised = by_cat.get(None, []) + [
-        p for k, lst in by_cat.items() 
-        if k and k not in {c.get("id") for c in cats if c.get("id")} 
-        for p in lst
-    ]
-    
-    if uncategorised:
-        cats.append({
-            "id": "_uncategorised",
-            "name": "More",
-            "description": "",
-            "accent": "from-[#9B8AC4] to-[#C8B6E2]",
-            "icon": "sparkles",
-            "order": 9999,
-            "products": uncategorised,
-        })
-    
+    cats = await db.product_categories.find({}, {"_id": 0}).to_list(50)
     return cats
     
     # Append uncategorised under a virtual bucket
