@@ -1,18 +1,25 @@
-/* ── Base ────────────────────────────────────────────────────────────────── */
+/* ── Global box-sizing ────────────────────────────────────────────────── */
 *,
 *::before,
 *::after {
+  box-sizing: border-box;
   /* Remove 300ms tap delay on Android/iOS */
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
 }
 
-html {
-  /* Prevent horizontal overflow on mobile */
+html,
+body,
+#root {
+  width: 100%;
+  min-height: 100%;
   overflow-x: hidden;
+}
+
+html {
   /* Use dynamic viewport height — accounts for Android Chrome URL bar */
   height: 100%;
-  /* Offset anchor scroll so sections don't hide under fixed header (72px header + ~20px buffer) */
+  /* Offset anchor scroll so sections don't hide under fixed header */
   scroll-padding-top: 92px;
   scroll-behavior: smooth;
 }
@@ -23,16 +30,28 @@ body {
   -webkit-overflow-scrolling: touch;
 }
 
+/* Smaller phones */
+@media (max-width: 380px) {
+  html { scroll-padding-top: 80px; }
+  body { font-size: 15px; }
+}
+
+@media (max-width: 640px) {
+  body { font-size: 15px; }
+}
+
 .App {
   min-height: 100dvh;
   background-color: #FBF4E8;
   overflow-x: hidden;
 }
 
-/* ── Mobile responsiveness helpers ─────────────────────────────────────── */
+/* ── Mobile responsiveness helpers ─────────────────────────────────── */
 
 /* All images scale correctly on small screens */
-img {
+img,
+video,
+svg {
   max-width: 100%;
   height: auto;
 }
@@ -43,20 +62,30 @@ h1, h2, h3, h4, h5, h6, p {
   word-wrap: break-word;
 }
 
+/* Inputs inherit font so they look consistent on mobile */
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
 /* Fix iOS momentum scroll in overflow containers */
 .overflow-y-auto,
 .overflow-x-auto {
   -webkit-overflow-scrolling: touch;
 }
 
-/* Ensure fixed elements don't overlap content on very small phones */
-@media (max-width: 380px) {
-  html { scroll-padding-top: 80px; }
+/* ── Glassmorphism card ─────────────────────────────────────────────── */
+.glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(235, 185, 154, 0.25);
+  box-shadow: 0 4px 24px rgba(107, 91, 149, 0.1);
 }
 
-/* ── Custom utility classes used throughout the site ────────────────────── */
-
-/* Aurora gradient background for the Hero section */
+/* ── Aurora gradient background for the Hero section ───────────────── */
 .aurora-bg {
   background: linear-gradient(
     135deg,
@@ -68,16 +97,7 @@ h1, h2, h3, h4, h5, h6, p {
   );
 }
 
-/* Glassmorphism card */
-.glass-card {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(235, 185, 154, 0.25);
-  box-shadow: 0 4px 24px rgba(107, 91, 149, 0.1);
-}
-
-/* Scrollbar styling */
+/* ── Scrollbar styling ──────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: #C8B6E2; border-radius: 3px; }
