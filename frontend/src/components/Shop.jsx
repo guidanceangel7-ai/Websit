@@ -809,7 +809,7 @@ function FloatingCart({ count, onClick }) {
 // CATEGORY VIEW — products grid with tag filter chips
 // ════════════════════════════════════════════════════════════════════════════
 function CategoryView({ cat, cartCount, onBack, onOpenCart, addToCart, cartQtyFor, onOpenDetail }) {
-  const products = cat.products || [];
+  const products = useMemo(() => cat.products || [], [cat.products]);
 
   // Collect all unique tags in this category
   const categoryTags = useMemo(() => {
