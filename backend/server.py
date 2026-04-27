@@ -1594,13 +1594,35 @@ def _normalize_product_images(doc: dict) -> dict:
 
 # ----- Public product category endpoints -----
 
+def _strip_base64_images(product: dict) -> dict:
+    """Replace base64 image strings with a lightweight flag so the public
+    listing is fast.  The full image is served by GET /api/products/{pid}/image/{idx}."""
+    out = {k: v for k, v in product.items() if k not in ("images",)}
+    img_url = product.get("image_url") or ""
+    # If it's a real HTTP(S) URL keep it; if base64 use the image endpoint instead
+    if img_url.startswith("http://") or img_url.startswith("https://"):
+        out["image_url"] = img_url
+        out["has_image"] = True
+    elif img_url.startswith("data:"):
+        pid = product.get("id", "")
+        out["image_url"] = f"/api/products/{pid}/image/0"
+        out["has_image"] = True
+    else:
+        out["image_url"] = None
+        out["has_image"] = False
+    # Count images without sending the data
+    raw_imgs = product.get("images") or ([img_url] if img_url else [])
+    out["image_count"] = len([i for i in raw_imgs if i])
+    return out
+
+
 @api_router.get("/product-categories")
 async def public_list_product_categories():
-    # Step 1: get categories
     cats = sorted(
         await db.product_categories.find({}, {"_id": 0}).to_list(200),
         key=lambda x: x.get("order", 9999)
     )
+    # Exclude raw base64 blobs from the listing to keep response small & fast
     products = sorted(
         await db.products.find({}, {"_id": 0}).to_list(500),
         key=lambda x: x.get("order", 9999)
@@ -1608,7 +1630,7 @@ async def public_list_product_categories():
     by_cat: dict = {}
     for p in products:
         cat_id = p.get("product_category_id")
-        by_cat.setdefault(cat_id, []).append(p)
+        by_cat.setdefault(cat_id, []).append(_strip_base64_images(p))
     for c in cats:
         c["products"] = by_cat.get(c.get("id"), [])
     return cats
@@ -1656,7 +1678,34 @@ async def admin_delete_product_category(cid: str, _admin: str = Depends(verify_a
 @api_router.get("/products")
 async def public_list_products():
     docs = sorted(await db.products.find({}, {"_id": 0}).to_list(length=200), key=lambda x: x.get("order", 9999))
-    return [_normalize_product_images(d) for d in docs]
+    return [_strip_base64_images(_normalize_product_images(d)) for d in docs]
+
+
+@api_router.get("/products/{pid}/image/{idx}")
+async def public_product_image(pid: str, idx: int = 0):
+    """Serve a single product image by product-id and zero-based index.
+    This keeps base64 data out of the main listing payload."""
+    from fastapi.responses import Response
+    import base64 as _b64
+    product = await db.products.find_one({"id": pid}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    norm = _normalize_product_images(product)
+    imgs = norm.get("images") or []
+    if idx >= len(imgs) or not imgs:
+        raise HTTPException(status_code=404, detail="Image not found")
+    img_data = imgs[idx]
+    if img_data.startswith("data:"):
+        # e.g. "data:image/jpeg;base64,/9j/4AAQ..."
+        header, encoded = img_data.split(",", 1)
+        mime = header.split(":")[1].split(";")[0]  # e.g. "image/jpeg"
+        raw = _b64.b64decode(encoded)
+        return Response(content=raw, media_type=mime,
+                        headers={"Cache-Control": "public, max-age=86400"})
+    elif img_data.startswith("http"):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=img_data)
+    raise HTTPException(status_code=404, detail="Image not found")
 
 
 @api_router.get("/tags")
