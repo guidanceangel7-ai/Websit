@@ -20,12 +20,14 @@ import {
   ArrowLeft,
   ArrowRight,
   BookOpen,
+  CalendarHeart,
   Check,
   Clock,
   Headphones,
   Heart,
   Loader2,
   Sparkles,
+  Stars,
 } from "lucide-react";
 import { BRAND } from "../lib/brand";
 import AvailableOffers from "./AvailableOffers";
@@ -39,61 +41,42 @@ async function apiFetch(path, options = {}) {
     headers: { "Content-Type": "application/json" },
     ...options,
   });
-
   const data = await res.json().catch(() => ({}));
-
   if (!res.ok) {
     const err = new Error(data.detail || "Request failed");
     err.data = data;
     throw err;
   }
-
   return data;
 }
 
 const CATEGORY_META = {
-  tarot_numerology_call: {
-    icon: Sparkles,
-    gradient: "from-[#6B5B95] via-[#9B8AC4] to-[#C8B6E2]",
-  },
-  tarot_numerology_question: {
-    icon: Headphones,
-    gradient: "from-[#9B8AC4] via-[#C8B6E2] to-[#E6DDF1]",
-  },
-  akashic: {
-    icon: BookOpen,
-    gradient: "from-[#EBB99A] via-[#F4C6D6] to-[#C8B6E2]",
-  },
-  all_in_one: {
-    icon: Sparkles,
-    gradient: "from-[#9B8AC4] via-[#F4C6D6] to-[#EBB99A]",
-  },
-  month_ahead: {
-    icon: Clock,
-    gradient: "from-[#C8B6E2] via-[#E6DDF1] to-[#F4C6D6]",
-  },
-  healing: {
-    icon: Heart,
-    gradient: "from-[#F4C6D6] via-[#EBB99A] to-[#FBE4D5]",
-  },
+  tarot_numerology_call:     { icon: Stars,        gradient: "from-[#6B5B95] via-[#9B8AC4] to-[#C8B6E2]" },
+  tarot_numerology_question: { icon: Headphones,   gradient: "from-[#9B8AC4] via-[#C8B6E2] to-[#E6DDF1]" },
+  akashic:                   { icon: BookOpen,     gradient: "from-[#EBB99A] via-[#F4C6D6] to-[#C8B6E2]" },
+  all_in_one:                { icon: Sparkles,     gradient: "from-[#9B8AC4] via-[#F4C6D6] to-[#EBB99A]" },
+  month_ahead:               { icon: CalendarHeart,gradient: "from-[#C8B6E2] via-[#E6DDF1] to-[#F4C6D6]" },
+  healing:                   { icon: Heart,        gradient: "from-[#F4C6D6] via-[#EBB99A] to-[#FBE4D5]" },
 };
 
-const STEPS_LIVE = ["category", "service", "schedule", "details", "pay"];
+const STEPS_LIVE  = ["category", "service", "schedule", "details", "pay"];
 const STEPS_VOICE = ["category", "service", "details", "pay"];
 
 const STEP_LABELS = {
   category: "Choose a Category",
-  service: "Choose a Variant",
+  service:  "Choose a Variant",
   schedule: "Pick a Date & Time",
-  details: "Your Details",
-  pay: "Confirm & Pay",
+  details:  "Your Details",
+  pay:      "Confirm & Pay",
 };
 
+/* ── Stepper — compact on mobile, fuller on desktop ─────────────────────── */
 function Stepper({ current, steps }) {
   return (
     <div className="flex items-center justify-center gap-1 sm:gap-2 mb-2 px-2">
       {steps.map((s, i) => (
         <React.Fragment key={s}>
+          {/* Circle */}
           <div
             className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center text-[10px] sm:text-xs font-bold shrink-0 transition ${
               i < current
@@ -105,7 +88,7 @@ function Stepper({ current, steps }) {
           >
             {i < current ? <Check size={11} strokeWidth={3} /> : i + 1}
           </div>
-
+          {/* Connector line */}
           {i < steps.length - 1 && (
             <div
               className={`h-0.5 flex-1 max-w-[24px] sm:max-w-[48px] ${
@@ -128,67 +111,45 @@ export default function BookingDialog({
   services,
   onServiceSelected,
 }) {
-  const [selectedService, setSelectedService] = useState(initialService || null);
+  const [selectedService, setSelectedService]       = useState(initialService || null);
   const [selectedCategoryId, setSelectedCategoryId] = useState(
     initialCategoryId || initialService?.category || null
   );
-
   const isVoiceNote = !!selectedService?.is_voice_note;
   const STEPS = isVoiceNote ? STEPS_VOICE : STEPS_LIVE;
 
-  const [step, setStep] = useState(0);
-  const [date, setDate] = useState(null);
-  const [slot, setSlot] = useState(null);
-  const [slots, setSlots] = useState([]);
+  const [step, setStep]               = useState(0);
+  const [date, setDate]               = useState(null);
+  const [slot, setSlot]               = useState(null);
+  const [slots, setSlots]             = useState([]);
   const [blockedDates, setBlockedDates] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [couponCode, setCouponCode] = useState("");
-  const [couponInfo, setCouponInfo] = useState(null);
+  const [submitting, setSubmitting]   = useState(false);
+  const [couponCode, setCouponCode]   = useState("");
+  const [couponInfo, setCouponInfo]   = useState(null);
   const [couponLoading, setCouponLoading] = useState(false);
 
   const [form, setForm] = useState({
-    customer_name: "",
+    customer_name:  "",
     customer_email: "",
     customer_phone: "",
-    birth_date: "",
-    birth_time: "",
-    birth_place: "",
-    question: "",
-    notes: "",
+    birth_date:     "",
+    birth_time:     "",
+    birth_place:    "",
+    question:       "",
+    notes:          "",
   });
 
   useEffect(() => {
     if (!open) return;
-
     setSelectedService(initialService || null);
     setSelectedCategoryId(initialCategoryId || initialService?.category || null);
-
-    if (initialService) {
-      setStep(2);
-    } else if (initialCategoryId) {
-      setStep(1);
-    } else {
-      setStep(0);
-    }
-
-    setDate(null);
-    setSlot(null);
-    setSlots([]);
-    setCouponCode("");
-    setCouponInfo(null);
-
-    setForm({
-      customer_name: "",
-      customer_email: "",
-      customer_phone: "",
-      birth_date: "",
-      birth_time: "",
-      birth_place: "",
-      question: "",
-      notes: "",
-    });
-
+    if (initialService)      { setStep(2); }
+    else if (initialCategoryId) { setStep(1); }
+    else                     { setStep(0); }
+    setDate(null); setSlot(null); setSlots([]);
+    setCouponCode(""); setCouponInfo(null);
+    setForm({ customer_name:"", customer_email:"", customer_phone:"", birth_date:"", birth_time:"", birth_place:"", question:"", notes:"" });
     apiFetch("/blocked-dates")
       .then((d) => setBlockedDates(Array.isArray(d) ? d : []))
       .catch(() => setBlockedDates([]));
@@ -196,92 +157,46 @@ export default function BookingDialog({
 
   useEffect(() => {
     if (!date || isVoiceNote) return;
-
     let alive = true;
     setLoadingSlots(true);
-
     const ds = format(date, "yyyy-MM-dd");
-
     apiFetch(`/slots/${ds}`)
-      .then((d) => {
-        if (alive) {
-          setSlots(d.is_open ? d.slots || [] : []);
-        }
-      })
-      .catch(() => {
-        if (alive) {
-          toast.error("Could not load slots, please try another date.");
-        }
-      })
-      .finally(() => {
-        if (alive) {
-          setLoadingSlots(false);
-        }
-      });
-
-    return () => {
-      alive = false;
-    };
+      .then((d) => { if (alive) setSlots(d.is_open ? (d.slots || []) : []); })
+      .catch(() => { if (alive) toast.error("Could not load slots, please try another date."); })
+      .finally(() => { if (alive) setLoadingSlots(false); });
+    return () => { alive = false; };
   }, [date, isVoiceNote]);
 
-  const stepLabel = useMemo(
-    () => STEP_LABELS[STEPS[step]] || "Begin Your Journey",
-    [step, STEPS]
-  );
+  const stepLabel = useMemo(() => STEP_LABELS[STEPS[step]] || "Begin Your Journey", [step, STEPS]);
 
   const canNext = useMemo(() => {
     const cur = STEPS[step];
-
     if (cur === "category") return !!selectedCategoryId;
-    if (cur === "service") return !!selectedService;
+    if (cur === "service")  return !!selectedService;
     if (cur === "schedule") return !!date && !!slot;
-
-    if (cur === "details") {
-      return (
-        form.customer_name.trim().length > 1 &&
-        /^\S+@\S+\.\S+$/.test(form.customer_email) &&
-        form.customer_phone.trim().length >= 7
-      );
-    }
-
+    if (cur === "details")  return (
+      form.customer_name.trim().length > 1 &&
+      /^\S+@\S+\.\S+$/.test(form.customer_email) &&
+      form.customer_phone.trim().length >= 7
+    );
     return true;
   }, [step, STEPS, selectedCategoryId, selectedService, date, slot, form]);
 
-  const goNext = () => {
-    if (canNext && step < STEPS.length - 1) {
-      setStep(step + 1);
-    }
-  };
-
-  const goBack = () => {
-    if (step > 0) {
-      setStep(step - 1);
-    }
-  };
+  const goNext = () => { if (canNext && step < STEPS.length - 1) setStep(step + 1); };
+  const goBack = () => { if (step > 0) setStep(step - 1); };
 
   const applyCoupon = async (codeArg) => {
     const code = (codeArg || couponCode || "").trim().toUpperCase();
-
     if (!code || !selectedService) return;
-
     setCouponCode(code);
     setCouponLoading(true);
-
     try {
       const data = await apiFetch("/promotions/validate", {
         method: "POST",
-        body: JSON.stringify({
-          code,
-          kind: "services",
-          base_inr: selectedService.price_inr,
-          target_id: selectedService.id,
-        }),
+        body: JSON.stringify({ code, kind:"services", base_inr:selectedService.price_inr, target_id:selectedService.id }),
       });
-
       setCouponInfo(data);
-      toast.success(
-        `Coupon applied — saved ₹${data.discount_inr.toLocaleString("en-IN")} ✦`
-      );
+      toast.success(`Coupon applied — saved ₹${data.discount_inr.toLocaleString("en-IN")} ✦`);
     } catch (e) {
       setCouponInfo(null);
       toast.error(e.data?.detail || "Invalid coupon");
@@ -292,131 +207,67 @@ export default function BookingDialog({
 
   const handlePay = async () => {
     if (!selectedService) return;
-
     setSubmitting(true);
-
     try {
       const payload = {
-        service_id: selectedService.id,
-        customer_name: form.customer_name.trim(),
+        service_id:     selectedService.id,
+        customer_name:  form.customer_name.trim(),
         customer_email: form.customer_email.trim(),
         customer_phone: form.customer_phone.trim(),
-        booking_date: isVoiceNote ? null : format(date, "yyyy-MM-dd"),
-        booking_slot: isVoiceNote ? null : slot,
-        birth_date: form.birth_date || null,
-        birth_time: form.birth_time || null,
-        birth_place: form.birth_place || null,
-        question: form.question || null,
-        notes: form.notes || null,
-        coupon_code: couponInfo ? couponCode.trim().toUpperCase() : null,
+        booking_date:   isVoiceNote ? null : format(date, "yyyy-MM-dd"),
+        booking_slot:   isVoiceNote ? null : slot,
+        birth_date:     form.birth_date  || null,
+        birth_time:     form.birth_time  || null,
+        birth_place:    form.birth_place || null,
+        question:       form.question    || null,
+        notes:          form.notes       || null,
+        coupon_code:    couponInfo ? couponCode.trim().toUpperCase() : null,
       };
-
-      const res = await apiFetch("/bookings/create-order", {
-        method: "POST",
-        body: JSON.stringify(payload),
-      });
-
-      const {
-        booking_id,
-        razorpay_order_id,
-        amount_paise,
-        is_mock,
-        razorpay_key_id,
-      } = res;
+      const res = await apiFetch("/bookings/create-order", { method:"POST", body:JSON.stringify(payload) });
+      const { booking_id, razorpay_order_id, amount_paise, is_mock, razorpay_key_id } = res;
 
       if (is_mock) {
         await apiFetch("/bookings/verify-payment", {
           method: "POST",
-          body: JSON.stringify({
-            booking_id,
-            razorpay_order_id,
-            razorpay_payment_id: `pay_mock_${Date.now()}`,
-          }),
+          body: JSON.stringify({ booking_id, razorpay_order_id, razorpay_payment_id:`pay_mock_${Date.now()}` }),
         });
-
-        toast.success("Booking confirmed (mock payment) ✦", {
-          description: `We'll reach out on WhatsApp at ${form.customer_phone}.`,
-        });
-
+        toast.success("Booking confirmed (mock payment) ✦", { description:`We'll reach out on WhatsApp at ${form.customer_phone}.` });
         onOpenChange(false);
         return;
       }
 
-      if (!window.Razorpay) {
-        toast.error("Payment SDK not loaded. Please refresh.");
-        setSubmitting(false);
-        return;
-      }
+      if (!window.Razorpay) { toast.error("Payment SDK not loaded. Please refresh."); setSubmitting(false); return; }
 
-      const isMobile =
-        typeof navigator !== "undefined" &&
-        /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
-
-      const callbackUrl = `${API}/bookings/payment-callback?booking_id=${encodeURIComponent(
-        booking_id
-      )}`;
+      const isMobile = typeof navigator !== "undefined" && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+      const callbackUrl = `${API}/bookings/payment-callback?booking_id=${encodeURIComponent(booking_id)}`;
 
       const options = {
         key: razorpay_key_id || RAZORPAY_KEY_ID,
-        amount: amount_paise,
-        currency: "INR",
-        name: BRAND.name,
-        description: selectedService.name,
+        amount: amount_paise, currency:"INR",
+        name: BRAND.name, description: selectedService.name,
         order_id: razorpay_order_id,
-        prefill: {
-          name: form.customer_name,
-          email: form.customer_email,
-          contact: form.customer_phone,
-        },
-        notes: {
-          booking_id,
-          service: selectedService.name,
-        },
-        theme: {
-          color: "#6B5B95",
-        },
+        prefill: { name:form.customer_name, email:form.customer_email, contact:form.customer_phone },
+        notes: { booking_id, service:selectedService.name },
+        theme: { color:"#6B5B95" },
         ...(isMobile
-          ? {
-              redirect: true,
-              callback_url: callbackUrl,
+          ? { redirect:true, callback_url:callbackUrl }
+          : { handler: async function(response) {
+              try {
+                await apiFetch("/bookings/verify-payment", {
+                  method:"POST",
+                  body:JSON.stringify({ booking_id, razorpay_order_id:response.razorpay_order_id, razorpay_payment_id:response.razorpay_payment_id, razorpay_signature:response.razorpay_signature }),
+                });
+                toast.success("Booking confirmed ✦", { description:"Check your email for confirmation." });
+              } catch { toast.error("Payment verification failed"); }
             }
-          : {
-              handler: async function (response) {
-                try {
-                  await apiFetch("/bookings/verify-payment", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      booking_id,
-                      razorpay_order_id: response.razorpay_order_id,
-                      razorpay_payment_id: response.razorpay_payment_id,
-                      razorpay_signature: response.razorpay_signature,
-                    }),
-                  });
-
-                  toast.success("Booking confirmed ✦", {
-                    description: "Check your email for confirmation.",
-                  });
-                } catch {
-                  toast.error("Payment verification failed");
-                }
-              },
-            }),
-        modal: {
-          ondismiss: () =>
-            toast("Payment cancelled. Your slot is reserved for 10 minutes."),
-        },
+          }),
+        modal: { ondismiss:() => toast("Payment cancelled. Your slot is reserved for 10 minutes.") },
       };
 
       onOpenChange(false);
-
       setTimeout(() => {
-        try {
-          const rzp = new window.Razorpay(options);
-          rzp.open();
-        } catch {
-          toast.error("Could not open payment window");
-        }
-
+        try { const rzp = new window.Razorpay(options); rzp.open(); }
+        catch { toast.error("Could not open payment window"); }
         setSubmitting(false);
       }, 60);
     } catch (e) {
@@ -428,18 +279,9 @@ export default function BookingDialog({
   const cur = STEPS[step];
 
   const disablePast = (d) => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const max = new Date();
-    max.setMonth(max.getMonth() + 2);
-
-    return (
-      d < today ||
-      d > max ||
-      d.getDay() === 0 ||
-      blockedDates.includes(format(d, "yyyy-MM-dd"))
-    );
+    const today = new Date(); today.setHours(0,0,0,0);
+    const max = new Date(); max.setMonth(max.getMonth() + 2);
+    return d < today || d > max || d.getDay() === 0 || blockedDates.includes(format(d, "yyyy-MM-dd"));
   };
 
   return (
@@ -454,6 +296,7 @@ export default function BookingDialog({
           shadow-[0_30px_80px_-20px_rgba(58,46,93,0.6)]
         "
       >
+        {/* ── Rich lavender header ─────────────────────────────────── */}
         <div className="relative bg-gradient-to-br from-[#6B5B95] via-[#9B8AC4] to-[#6B5B95] px-4 sm:px-8 pt-5 sm:pt-7 pb-4 sm:pb-6">
           <div className="absolute -top-12 -right-8 w-44 h-44 rounded-full bg-[#EBB99A]/40 blur-3xl pointer-events-none" />
           <div className="absolute -bottom-16 -left-10 w-44 h-44 rounded-full bg-[#F4C6D6]/40 blur-3xl pointer-events-none" />
@@ -462,16 +305,12 @@ export default function BookingDialog({
             <div className="text-center text-[9px] sm:text-[10px] tracking-[0.28em] sm:tracking-[0.32em] uppercase text-[#EBB99A] font-semibold mb-1.5">
               ✦ Begin Your Journey ✦
             </div>
-
             <DialogTitle className="font-display text-xl sm:text-3xl text-white text-center drop-shadow-[0_2px_8px_rgba(0,0,0,0.25)] leading-tight">
               {stepLabel}
             </DialogTitle>
-
             <DialogDescription className="text-center text-white/85 text-xs sm:text-sm mt-0.5">
               {selectedService
-                ? `${selectedService.name} · ₹${selectedService.price_inr.toLocaleString(
-                    "en-IN"
-                  )}`
+                ? `${selectedService.name} · ₹${selectedService.price_inr.toLocaleString("en-IN")}`
                 : "Sacred guidance, one breath at a time"}
             </DialogDescription>
           </DialogHeader>
@@ -481,51 +320,41 @@ export default function BookingDialog({
           </div>
         </div>
 
+        {/* ── Scrollable content area ──────────────────────────────── */}
         <div className="px-4 sm:px-8 py-5 sm:py-7 max-h-[55vh] sm:max-h-[60vh] overflow-y-auto overscroll-contain bg-[#FFFFFF]">
+
+          {/* STEP: category */}
           {cur === "category" && (
             <div data-testid="step-category" className="grid sm:grid-cols-2 gap-3">
               {categories?.map((c) => {
-                const meta = CATEGORY_META[c.id] || CATEGORY_META.tarot_numerology_call;
-                const Icon = meta.icon;
-                const minPrice = c.services?.length
-                  ? Math.min(...c.services.map((s) => s.price_inr))
-                  : 0;
-
+                const meta     = CATEGORY_META[c.id] || CATEGORY_META.tarot_numerology_call;
+                const Icon     = meta.icon;
+                const minPrice = c.services?.length ? Math.min(...c.services.map((s) => s.price_inr)) : 0;
                 return (
                   <button
                     key={c.id}
                     data-testid={`pick-category-${c.id}`}
-                    onClick={() => {
-                      setSelectedCategoryId(c.id);
-                      setStep(1);
-                    }}
+                    onClick={() => { setSelectedCategoryId(c.id); setStep(1); }}
                     className="group text-left rounded-2xl border-2 border-[#EBB99A]/30 hover:border-[#6B5B95] hover:-translate-y-0.5 transition shadow-sm hover:shadow-[0_12px_28px_-8px_rgba(107,91,149,0.3)] overflow-hidden"
                   >
-                    <div
-                      className={`bg-gradient-to-br ${meta.gradient} px-4 py-3 sm:px-5 sm:py-4 relative`}
-                    >
+                    <div className={`bg-gradient-to-br ${meta.gradient} px-4 py-3 sm:px-5 sm:py-4 relative`}>
                       <div className="absolute -top-8 -right-8 w-28 h-28 rounded-full bg-white/15 blur-2xl pointer-events-none" />
-
                       <div className="relative flex items-start justify-between gap-2">
                         <div className="w-9 h-9 rounded-xl bg-white/30 backdrop-blur flex items-center justify-center text-white shrink-0">
                           <Icon size={17} strokeWidth={1.6} />
                         </div>
-
                         <span className="text-[10px] tracking-[0.15em] uppercase bg-white/30 text-white backdrop-blur px-2 py-1 rounded-full font-bold whitespace-nowrap">
                           From ₹{minPrice.toLocaleString("en-IN")}
                         </span>
                       </div>
-
                       <div className="font-display text-sm sm:text-lg text-white mt-2 leading-tight drop-shadow-[0_1px_4px_rgba(0,0,0,0.2)]">
                         {c.name}
                       </div>
                     </div>
-
                     <div className="bg-white px-4 py-2.5 sm:px-5 sm:py-3">
                       <p className="text-xs text-[#3A2E5D]/70 leading-relaxed line-clamp-2">
                         {c.tagline || c.description}
                       </p>
-
                       <div className="mt-1.5 text-[10px] tracking-[0.2em] uppercase text-[#9B8AC4] inline-flex items-center gap-1">
                         {c.services?.length || 0} variants <ArrowRight size={11} />
                       </div>
@@ -536,6 +365,7 @@ export default function BookingDialog({
             </div>
           )}
 
+          {/* STEP: service — FIXED price overflow */}
           {cur === "service" && (
             <div data-testid="step-service" className="grid gap-3">
               {(selectedCategoryId
@@ -553,29 +383,24 @@ export default function BookingDialog({
                   className="group text-left rounded-2xl border-2 border-[#EBB99A]/30 bg-gradient-to-r from-[#FBF4E8] to-white px-4 sm:px-5 py-3.5 sm:py-4 hover:border-[#6B5B95] hover:shadow-[0_8px_24px_-8px_rgba(107,91,149,0.3)] hover:-translate-y-0.5 transition"
                 >
                   <div className="flex items-center justify-between gap-3 w-full">
+                    {/* Left: icon + label — allow shrinking */}
                     <div className="flex items-center gap-3 min-w-0 flex-1">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#C8B6E2] to-[#EBB99A] flex items-center justify-center text-white shadow-[0_4px_12px_rgba(155,138,196,0.3)] shrink-0">
                         {s.is_voice_note ? <Headphones size={17} /> : <Clock size={17} />}
                       </div>
-
                       <div className="min-w-0">
                         <div className="text-[10px] uppercase tracking-[0.18em] text-[#D9A382] font-bold truncate">
-                          {s.is_voice_note
-                            ? "Voice Note · 48 hr"
-                            : `${s.duration_minutes} min · Live call`}
+                          {s.is_voice_note ? "Voice Note · 48 hr" : `${s.duration_minutes} min · Live call`}
                         </div>
-
-                        <div className="font-display text-sm sm:text-base text-[#3A2E5D] mt-0.5 truncate">
-                          {s.name}
-                        </div>
+                        <div className="font-display text-sm sm:text-base text-[#3A2E5D] mt-0.5 truncate">{s.name}</div>
                       </div>
                     </div>
 
+                    {/* Right: price — never shrink, never clip */}
                     <div className="shrink-0 text-right pl-2">
                       <div className="font-display text-[#6B5B95] text-lg sm:text-2xl whitespace-nowrap">
                         ₹{s.price_inr.toLocaleString("en-IN")}
                       </div>
-
                       <div className="text-[10px] tracking-wider text-[#9B8AC4] uppercase opacity-0 group-hover:opacity-100 transition">
                         Select →
                       </div>
@@ -586,56 +411,47 @@ export default function BookingDialog({
             </div>
           )}
 
+          {/* STEP: schedule */}
           {cur === "schedule" && (
             <div data-testid="step-schedule" className="grid sm:grid-cols-2 gap-5 sm:gap-6">
               <div>
                 <Label className="text-xs uppercase tracking-[0.22em] text-peach-deep font-semibold">
                   ✦ Pick a date
                 </Label>
-
                 <div className="mt-2 sm:mt-3 rounded-2xl border-2 border-peach/40 bg-[#FBF4E8] p-1 sm:p-2">
                   <Calendar
                     mode="single"
                     selected={date}
-                    onSelect={(d) => {
-                      setDate(d);
-                      setSlot(null);
-                    }}
+                    onSelect={(d) => { setDate(d); setSlot(null); }}
                     disabled={disablePast}
                     className="rounded-2xl bg-[#FBF4E8] w-full"
                     data-testid="booking-calendar"
                   />
                 </div>
-
                 <p className="text-xs text-ink-plum/70 mt-2 italic">
                   Sundays are reserved for rest. Slots: 10 AM – 8 PM IST.
                 </p>
               </div>
-
               <div>
                 <Label className="text-xs uppercase tracking-[0.22em] text-peach-deep font-semibold">
                   ✦ Available time slots
                 </Label>
-
                 <div className="mt-2 sm:mt-3 grid grid-cols-2 gap-2 max-h-[240px] sm:max-h-[300px] overflow-y-auto pr-1">
                   {!date && (
                     <div className="col-span-2 text-sm text-ink-plum/60 bg-peach/10 rounded-xl p-4 text-center italic">
                       Pick a date to see available slots ✦
                     </div>
                   )}
-
                   {date && loadingSlots && (
                     <div className="col-span-2 inline-flex items-center gap-2 text-sm text-ink-plum/60">
                       <Loader2 className="animate-spin" size={14} /> Loading…
                     </div>
                   )}
-
                   {date && !loadingSlots && slots.length === 0 && (
                     <div className="col-span-2 text-sm text-ink-plum/70 bg-peach/15 rounded-xl p-4 text-center">
                       No slots available – please pick another date.
                     </div>
                   )}
-
                   {slots.map((s) => (
                     <button
                       key={s}
@@ -647,8 +463,7 @@ export default function BookingDialog({
                           : "bg-white border-[#EBB99A]/40 text-[#3A2E5D] hover:border-[#6B5B95] hover:bg-[#FBF4E8]"
                       }`}
                     >
-                      <Clock size={11} className="inline mr-1 -mt-0.5" />
-                      {s}
+                      <Clock size={11} className="inline mr-1 -mt-0.5" />{s}
                     </button>
                   ))}
                 </div>
@@ -656,80 +471,55 @@ export default function BookingDialog({
             </div>
           )}
 
+          {/* STEP: details */}
           {cur === "details" && (
             <div data-testid="step-details" className="grid sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <Label htmlFor="customer_name" className="text-ink-plum font-semibold text-sm">
                   Full name <span className="text-peach-deep">*</span>
                 </Label>
-
-                <Input
-                  id="customer_name"
-                  data-testid="input-name"
-                  placeholder="Your beautiful name"
+                <Input id="customer_name" data-testid="input-name" placeholder="Your beautiful name"
                   value={form.customer_name}
                   onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
-
               <div>
                 <Label htmlFor="customer_email" className="text-ink-plum font-semibold text-sm">
                   Email <span className="text-peach-deep">*</span>
                 </Label>
-
-                <Input
-                  id="customer_email"
-                  type="email"
-                  data-testid="input-email"
-                  placeholder="you@example.com"
+                <Input id="customer_email" type="email" data-testid="input-email" placeholder="you@example.com"
                   value={form.customer_email}
                   onChange={(e) => setForm({ ...form, customer_email: e.target.value })}
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
-
               <div>
                 <Label htmlFor="customer_phone" className="text-ink-plum font-semibold text-sm">
                   WhatsApp number <span className="text-peach-deep">*</span>
                 </Label>
-
-                <Input
-                  id="customer_phone"
-                  data-testid="input-phone"
-                  placeholder="+91 98XXX XXXXX"
+                <Input id="customer_phone" data-testid="input-phone" placeholder="+91 98XXX XXXXX"
                   value={form.customer_phone}
                   onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
-
               <div>
                 <Label htmlFor="birth_date" className="text-ink-plum font-semibold text-sm">
                   Birth date
                 </Label>
-
-                <Input
-                  id="birth_date"
-                  type="date"
-                  data-testid="input-birth-date"
+                <Input id="birth_date" type="date" data-testid="input-birth-date"
                   value={form.birth_date}
                   onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
-
               <div className="sm:col-span-2">
                 <Label htmlFor="question" className="text-ink-plum font-semibold text-sm">
                   Question / topic for the reading
                 </Label>
-
-                <Textarea
-                  id="question"
-                  data-testid="input-question"
-                  placeholder="Share what's on your heart…"
-                  rows={3}
-                  value={form.question}
+                <Textarea id="question" data-testid="input-question" placeholder="Share what's on your heart…"
+                  rows={3} value={form.question}
                   onChange={(e) => setForm({ ...form, question: e.target.value })}
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep"
                 />
@@ -737,58 +527,34 @@ export default function BookingDialog({
             </div>
           )}
 
+          {/* STEP: pay */}
           {cur === "pay" && (
             <div data-testid="step-pay" className="space-y-4 sm:space-y-5">
               <div className="rounded-2xl bg-gradient-to-br from-[#FBF4E8] via-white to-[#F4C6D6]/15 border-2 border-[#EBB99A]/40 p-4 sm:p-6 shadow-sm">
                 <div className="text-[11px] uppercase tracking-[0.28em] text-[#D9A382] font-bold flex items-center gap-2">
                   <Sparkles size={13} className="text-[#EBB99A]" /> Booking Summary
                 </div>
-
                 <div className="mt-3 sm:mt-4 grid sm:grid-cols-2 gap-3 sm:gap-4 text-sm">
                   <div className="bg-white/60 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 border border-[#EBB99A]/20">
-                    <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">
-                      Service
-                    </div>
-
-                    <div className="font-display text-base sm:text-lg text-[#3A2E5D] mt-0.5">
-                      {selectedService?.name}
-                    </div>
+                    <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">Service</div>
+                    <div className="font-display text-base sm:text-lg text-[#3A2E5D] mt-0.5">{selectedService?.name}</div>
                   </div>
-
                   {!isVoiceNote && date && slot && (
                     <div className="bg-white/60 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 border border-[#EBB99A]/20">
-                      <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">
-                        Date & time
-                      </div>
-
+                      <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">Date & time</div>
                       <div className="font-display text-sm sm:text-base text-[#3A2E5D] mt-0.5">
                         {format(date, "EEE, dd MMM")} · {slot}
                       </div>
                     </div>
                   )}
-
                   <div className="bg-white/60 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 border border-[#EBB99A]/20">
-                    <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">
-                      For
-                    </div>
-
-                    <div className="text-[#3A2E5D] mt-0.5 text-sm">
-                      {form.customer_name}
-                    </div>
-
-                    <div className="text-[#3A2E5D]/70 text-xs truncate">
-                      {form.customer_email}
-                    </div>
+                    <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">For</div>
+                    <div className="text-[#3A2E5D] mt-0.5 text-sm">{form.customer_name}</div>
+                    <div className="text-[#3A2E5D]/70 text-xs truncate">{form.customer_email}</div>
                   </div>
-
                   <div className="bg-white/60 rounded-xl px-3 py-2.5 sm:px-4 sm:py-3 border border-[#EBB99A]/20">
-                    <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">
-                      WhatsApp
-                    </div>
-
-                    <div className="text-[#3A2E5D] mt-0.5 text-sm">
-                      {form.customer_phone}
-                    </div>
+                    <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">WhatsApp</div>
+                    <div className="text-[#3A2E5D] mt-0.5 text-sm">{form.customer_phone}</div>
                   </div>
                 </div>
 
@@ -797,42 +563,26 @@ export default function BookingDialog({
                     <div className="flex items-center justify-between text-sm">
                       <div className="text-emerald-700 inline-flex items-center gap-2">
                         <Sparkles size={13} className="text-[#EBB99A]" />
-                        Coupon{" "}
-                        <span className="font-mono font-bold">
-                          {couponCode.toUpperCase()}
-                        </span>{" "}
-                        applied
+                        Coupon <span className="font-mono font-bold">{couponCode.toUpperCase()}</span> applied
                       </div>
-
                       <div className="text-emerald-700 font-medium whitespace-nowrap">
                         − ₹{couponInfo.discount_inr.toLocaleString("en-IN")}
                       </div>
                     </div>
                   )}
-
                   <div className="flex items-center justify-between gap-4">
                     <div className="text-sm text-[#6B5B95] uppercase tracking-[0.2em] font-bold">
                       {couponInfo ? "Final amount" : "Total payable"}
                     </div>
-
                     <div className="font-display text-2xl sm:text-3xl bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] bg-clip-text text-transparent whitespace-nowrap">
-                      ₹
-                      {(
-                        couponInfo
-                          ? couponInfo.final_inr
-                          : selectedService?.price_inr || 0
-                      ).toLocaleString("en-IN")}
+                      ₹{(couponInfo ? couponInfo.final_inr : selectedService?.price_inr || 0).toLocaleString("en-IN")}
                     </div>
                   </div>
                 </div>
               </div>
 
               {!couponInfo && (
-                <AvailableOffers
-                  kind="services"
-                  appliedCode={couponInfo ? couponCode : null}
-                  onApply={(code) => applyCoupon(code)}
-                />
+                <AvailableOffers kind="services" appliedCode={couponInfo ? couponCode : null} onApply={(code) => applyCoupon(code)} />
               )}
 
               {!couponInfo && (
@@ -840,7 +590,6 @@ export default function BookingDialog({
                   <div className="text-[10px] uppercase tracking-[0.28em] text-[#D9A382] font-bold flex items-center gap-2">
                     <Sparkles size={12} className="text-[#EBB99A]" /> Have a coupon?
                   </div>
-
                   <div className="mt-2.5 flex gap-2">
                     <input
                       data-testid="booking-coupon-input"
@@ -849,7 +598,6 @@ export default function BookingDialog({
                       placeholder="Enter code"
                       className="flex-1 min-w-0 rounded-xl border-2 border-peach/40 bg-[#FBF4E8] px-3 py-2 text-ink-plum placeholder:text-ink-plum/40 focus:border-lavender-deep outline-none uppercase tracking-wider font-mono text-sm"
                     />
-
                     <button
                       type="button"
                       data-testid="booking-coupon-apply"
@@ -857,9 +605,7 @@ export default function BookingDialog({
                       onClick={() => applyCoupon()}
                       className="shrink-0 inline-flex items-center gap-1 bg-lavender-deep text-ivory rounded-xl px-4 py-2 text-sm font-medium hover:bg-lavender-deeper disabled:opacity-50"
                     >
-                      {couponLoading ? (
-                        <Loader2 className="animate-spin" size={14} />
-                      ) : null}
+                      {couponLoading ? <Loader2 className="animate-spin" size={14} /> : null}
                       Apply
                     </button>
                   </div>
@@ -869,10 +615,7 @@ export default function BookingDialog({
               {couponInfo && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setCouponInfo(null);
-                    setCouponCode("");
-                  }}
+                  onClick={() => { setCouponInfo(null); setCouponCode(""); }}
                   className="text-xs text-ink-plum/60 hover:text-red-500 underline"
                 >
                   Remove coupon
@@ -883,18 +626,16 @@ export default function BookingDialog({
                 <div className="w-8 h-8 sm:w-9 sm:h-9 rounded-full bg-gradient-to-br from-[#EBB99A] to-[#F4C6D6] flex items-center justify-center text-white shrink-0">
                   <Sparkles size={15} />
                 </div>
-
                 <div className="leading-relaxed text-xs sm:text-sm">
-                  Secure payment powered by{" "}
-                  <span className="font-semibold text-[#6B5B95]">Razorpay</span>{" "}
-                  — UPI, cards, netbanking, wallets. You'll receive WhatsApp + email
-                  confirmation immediately after payment.
+                  Secure payment powered by <span className="font-semibold text-[#6B5B95]">Razorpay</span> — UPI, cards, netbanking, wallets.
+                  You'll receive WhatsApp + email confirmation immediately after payment.
                 </div>
               </div>
             </div>
           )}
         </div>
 
+        {/* ── Footer bar ───────────────────────────────────────────── */}
         <div className="border-t-2 border-[#EBB99A]/30 bg-gradient-to-r from-[#FBF4E8] to-[#F5EAD6] px-4 sm:px-8 py-3.5 sm:py-4 flex items-center justify-between gap-3">
           <Button
             variant="ghost"
@@ -914,13 +655,7 @@ export default function BookingDialog({
               className="bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] hover:from-[#5A4C7E] hover:to-[#6B5B95] text-white rounded-full px-5 sm:px-8 py-2.5 shadow-[0_8px_24px_-8px_rgba(107,91,149,0.6)] font-medium text-sm whitespace-nowrap"
             >
               {submitting ? <Loader2 className="animate-spin mr-2" size={15} /> : null}
-              Pay ₹
-              {(
-                couponInfo
-                  ? couponInfo.final_inr
-                  : selectedService?.price_inr || 0
-              ).toLocaleString("en-IN")}{" "}
-              ✦
+              Pay ₹{(couponInfo ? couponInfo.final_inr : selectedService?.price_inr || 0).toLocaleString("en-IN")} ✦
             </Button>
           ) : (
             <Button
