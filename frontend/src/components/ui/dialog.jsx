@@ -26,12 +26,15 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        // Base: centred, full-width on mobile, capped height
-        "fixed left-[50%] top-[50%] z-50 grid w-[calc(100vw-24px)] sm:w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 bg-white shadow-xl duration-200",
+        // Mobile: anchored near top so footer buttons are always visible
+        // Desktop: centred as normal
+        "fixed left-[50%] z-50 grid bg-white shadow-xl duration-200",
+        "top-3 translate-x-[-50%] translate-y-0 sm:top-[50%] sm:translate-y-[-50%]",
+        "w-[calc(100vw-24px)] sm:w-full max-w-lg",
         // Animations
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
-        // Mobile-friendly sizing: use dvh so it shrinks when keyboard appears
-        "rounded-2xl sm:rounded-3xl p-0 overflow-hidden max-h-[90dvh] sm:max-h-[90vh]",
+        // Height: leave room for browser bar + banner on mobile
+        "rounded-2xl sm:rounded-3xl p-0 overflow-hidden max-h-[calc(100dvh-24px)] sm:max-h-[90vh]",
         className
       )}
       {...props}
