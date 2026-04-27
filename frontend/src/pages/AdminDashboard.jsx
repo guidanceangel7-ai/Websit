@@ -11,7 +11,7 @@ import {
   X, Plus, Trash2, Download, Sparkles, ShoppingBag, Check,
   Layers, ChevronDown, ChevronUp, ImagePlus, FolderOpen, Edit2,
   ZoomIn, ZoomOut, Move, Crop, RotateCcw, CalendarDays, CalendarX,
-  TrendingUp, Users, Eye, Globe,
+  TrendingUp, Users, Eye, Globe, MessageSquare,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -1892,60 +1892,332 @@ function ServicesTab({ toast }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// ANALYTICS TAB — PostHog is already tracking. This tab shows the dashboard
-// link and key tips.
+// TESTIMONIALS TAB — full CRUD for /admin/testimonials
 // ════════════════════════════════════════════════════════════════════════════
-function AnalyticsTab() {
-  const posthogUrl = "https://us.posthog.com";
-  const cards = [
-    { icon: Eye,       label: "Page Views",       desc: "See which pages users visit most and how long they stay." },
-    { icon: Users,     label: "Unique Visitors",  desc: "Track how many unique people visit your site each day/week/month." },
-    { icon: Globe,     label: "Traffic Sources",  desc: "Find out how visitors are finding you — Google, Instagram, direct, etc." },
-    { icon: TrendingUp,label: "Conversion Funnels",desc: "See how many visitors go from homepage → booking dialog → confirmed booking." },
-  ];
+function TestimonialsTab({ toast }) {
+  const empty = { author: "", content: "", rating: 5, source: "", visible: true };
+  const [items, setItems]     = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [form, setForm]       = useState(empty);
+  const [editId, setEditId]   = useState(null);
+  const [saving, setSaving]   = useState(false);
+
+  const load = () => {
+    setLoading(true);
+    fetch(`${API}/admin/testimonials`, { headers: authH() })
+      .then(r => r.ok ? r.json() : [])
+      .then(d => { setItems(Array.isArray(d) ? d : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  };
+  useEffect(load, []);
+
+  const resetForm = () => { setForm(empty); setEditId(null); };
+
+  const startEdit = (t) => {
+    setForm({ author: t.author || "", content: t.content || "", rating: t.rating || 5, source: t.source || "", visible: t.visible !== false });
+    setEditId(t.id);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const save = async () => {
+    if (!form.author.trim() || !form.content.trim()) { toast("Author and review text are required", "error"); return; }
+    setSaving(true);
+    try {
+      const url    = editId ? `${API}/admin/testimonials/${editId}` : `${API}/admin/testimonials`;
+      const method = editId ? "PUT" : "POST";
+      const res    = await fetch(url, { method, headers: authH(), body: JSON.stringify(form) });
+      if (!res.ok) throw new Error();
+      toast(editId ? "Testimonial updated!" : "Testimonial added!", "success");
+      resetForm();
+      load();
+    } catch { toast("Save failed", "error"); }
+    setSaving(false);
+  };
+
+  const remove = async (id) => {
+    if (!window.confirm("Delete this testimonial?")) return;
+    await fetch(`${API}/admin/testimonials/${id}`, { method: "DELETE", headers: authH() });
+    toast("Deleted", "success");
+    load();
+  };
+
+  const toggle = async (t) => {
+    await fetch(`${API}/admin/testimonials/${t.id}`, {
+      method: "PUT", headers: authH(),
+      body: JSON.stringify({ ...t, visible: !t.visible }),
+    });
+    load();
+  };
+
+  const inp = "w-full border border-[#C8B6E2] rounded-xl px-3 py-2 text-sm text-[#3A2E5D] focus:outline-none focus:ring-2 focus:ring-[#6B5B95]/30";
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-7">
       <div>
-        <h3 className="font-display text-xl text-[#3A2E5D] mb-1">Analytics</h3>
-        <p className="text-sm text-[#9B8AC4]">Your site is already tracking visitors via PostHog. Open your dashboard to see live data.</p>
+        <h3 className="font-display text-xl text-[#3A2E5D] mb-1">Testimonials</h3>
+        <p className="text-sm text-[#9B8AC4]">Add, edit, or remove client reviews shown on the website.</p>
       </div>
 
-      {/* CTA */}
-      <div className="bg-gradient-to-br from-[#3A2E5D] to-[#6B5B95] rounded-2xl p-6 text-white flex flex-col sm:flex-row items-start sm:items-center gap-4">
-        <div className="flex-1">
-          <div className="font-display text-lg font-semibold mb-1">PostHog Analytics Dashboard</div>
-          <p className="text-white/70 text-sm">All your website traffic, visitor sessions, and user behavior is being tracked in real-time.</p>
+      {/* Add / Edit form */}
+      <div className="bg-white border border-[#C8B6E2] rounded-2xl p-6 space-y-4">
+        <div className="font-semibold text-[#3A2E5D] text-sm">{editId ? "✏️ Edit Testimonial" : "➕ Add New Testimonial"}</div>
+        <div className="grid sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-xs text-[#9B8AC4] mb-1">Client Name *</label>
+            <input className={inp} placeholder="e.g. Priya M." value={form.author}
+              onChange={e => setForm(f => ({ ...f, author: e.target.value }))} />
+          </div>
+          <div>
+            <label className="block text-xs text-[#9B8AC4] mb-1">Source (optional)</label>
+            <input className={inp} placeholder="e.g. Google, Instagram" value={form.source}
+              onChange={e => setForm(f => ({ ...f, source: e.target.value }))} />
+          </div>
         </div>
-        <a href={posthogUrl} target="_blank" rel="noopener noreferrer"
+        <div>
+          <label className="block text-xs text-[#9B8AC4] mb-1">Review Text *</label>
+          <textarea className={`${inp} resize-none`} rows={4} placeholder="What did the client say?"
+            value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} />
+        </div>
+        <div className="flex items-center gap-6 flex-wrap">
+          <div>
+            <label className="block text-xs text-[#9B8AC4] mb-1">Rating</label>
+            <div className="flex gap-1">
+              {[1,2,3,4,5].map(n => (
+                <button key={n} onClick={() => setForm(f => ({ ...f, rating: n }))}
+                  className={`w-8 h-8 rounded-full text-sm font-bold border transition ${
+                    form.rating >= n ? "bg-[#EBB99A] border-[#EBB99A] text-white" : "border-[#C8B6E2] text-[#9B8AC4]"
+                  }`}>{n}</button>
+              ))}
+            </div>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-[#3A2E5D] cursor-pointer select-none">
+            <input type="checkbox" checked={form.visible}
+              onChange={e => setForm(f => ({ ...f, visible: e.target.checked }))}
+              className="w-4 h-4 accent-[#6B5B95]" />
+            Visible on website
+          </label>
+        </div>
+        <div className="flex gap-3 pt-1">
+          <button onClick={save} disabled={saving}
+            className="bg-[#6B5B95] text-white px-5 py-2 rounded-xl text-sm font-medium hover:bg-[#3A2E5D] transition disabled:opacity-60">
+            {saving ? "Saving…" : editId ? "Update Testimonial" : "Add Testimonial"}
+          </button>
+          {editId && (
+            <button onClick={resetForm}
+              className="px-5 py-2 rounded-xl text-sm border border-[#C8B6E2] text-[#6B5B95] hover:bg-[#F5EEF8] transition">
+              Cancel
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* List */}
+      {loading ? (
+        <div className="text-center py-8 text-[#9B8AC4] text-sm">Loading…</div>
+      ) : items.length === 0 ? (
+        <div className="text-center py-10 text-[#9B8AC4] text-sm">No testimonials yet. Add your first one above.</div>
+      ) : (
+        <div className="space-y-3">
+          {items.map((t) => (
+            <div key={t.id} className={`bg-white border rounded-2xl p-5 flex gap-4 items-start transition ${
+              t.visible === false ? "border-[#C8B6E2]/40 opacity-60" : "border-[#C8B6E2]"
+            }`}>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className="font-semibold text-[#3A2E5D] text-sm">{t.author}</span>
+                  {t.source && <span className="text-[10px] text-[#9B8AC4] uppercase tracking-wider">via {t.source}</span>}
+                  <span className="text-[#EBB99A] text-xs">{"★".repeat(t.rating || 5)}</span>
+                  {t.visible === false && (
+                    <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full">Hidden</span>
+                  )}
+                </div>
+                <p className="text-sm text-[#3A2E5D]/75 leading-relaxed line-clamp-3 italic">&ldquo;{t.content}&rdquo;</p>
+              </div>
+              <div className="flex flex-col gap-1.5 flex-shrink-0">
+                <button onClick={() => startEdit(t)}
+                  className="px-3 py-1.5 rounded-lg text-xs border border-[#C8B6E2] text-[#6B5B95] hover:bg-[#F5EEF8] transition">Edit</button>
+                <button onClick={() => toggle(t)}
+                  className="px-3 py-1.5 rounded-lg text-xs border border-[#C8B6E2] text-[#6B5B95] hover:bg-[#F5EEF8] transition">
+                  {t.visible === false ? "Show" : "Hide"}
+                </button>
+                <button onClick={() => remove(t.id)}
+                  className="px-3 py-1.5 rounded-lg text-xs border border-red-200 text-red-500 hover:bg-red-50 transition">Delete</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ════════════════════════════════════════════════════════════════════════════
+// ANALYTICS TAB — live numbers from bookings/orders + PostHog link
+// ════════════════════════════════════════════════════════════════════════════
+function AnalyticsTab() {
+  const [stats, setStats]       = useState(null);
+  const [bookings, setBookings] = useState([]);
+  const [orders, setOrders]     = useState([]);
+  const [loading, setLoading]   = useState(true);
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API}/admin/stats`,    { headers: authH() }).then(r => r.ok ? r.json() : {}),
+      fetch(`${API}/admin/bookings`, { headers: authH() }).then(r => r.ok ? r.json() : []),
+      fetch(`${API}/admin/orders`,   { headers: authH() }).then(r => r.ok ? r.json() : []),
+    ]).then(([s, b, o]) => {
+      setStats(s);
+      setBookings(Array.isArray(b) ? b : []);
+      setOrders(Array.isArray(o) ? o : []);
+      setLoading(false);
+    }).catch(() => setLoading(false));
+  }, []);
+
+  // Build last-7-days per day
+  const last7 = React.useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const key = d.toISOString().slice(0, 10);
+      const label = d.toLocaleDateString("en-IN", { weekday: "short" });
+      days.push({ key, label, bookings: 0, orders: 0 });
+    }
+    bookings.forEach(b => {
+      const key = (b.created_at || "").slice(0, 10);
+      const slot = days.find(d => d.key === key);
+      if (slot) slot.bookings += 1;
+    });
+    orders.forEach(o => {
+      const key = (o.created_at || "").slice(0, 10);
+      const slot = days.find(d => d.key === key);
+      if (slot) slot.orders += 1;
+    });
+    return days;
+  }, [bookings, orders]);
+
+  const totalRev = orders.filter(o => o.payment_status === "paid")
+    .reduce((s, o) => s + (o.total_amount || 0), 0);
+  const confirmedBookings = bookings.filter(b => b.status === "confirmed").length;
+  const maxBar = Math.max(1, ...last7.map(d => d.bookings + d.orders));
+
+  const recentBookings = [...bookings]
+    .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+    .slice(0, 5);
+
+  const metricCards = [
+    { label: "Total Bookings",  value: bookings.length,  icon: BookOpen,    color: "#6B5B95" },
+    { label: "Confirmed",       value: confirmedBookings, icon: Eye,         color: "#22c55e" },
+    { label: "Total Orders",    value: orders.length,    icon: ShoppingBag, color: "#EBB99A" },
+    { label: "Revenue (paid)",  value: `₹${totalRev.toLocaleString("en-IN")}`, icon: TrendingUp, color: "#3A2E5D" },
+  ];
+
+  return (
+    <div className="space-y-7">
+      <div>
+        <h3 className="font-display text-xl text-[#3A2E5D] mb-1">Analytics</h3>
+        <p className="text-sm text-[#9B8AC4]">Live stats from your bookings and orders. Website traffic tracked via PostHog.</p>
+      </div>
+
+      {/* PostHog CTA */}
+      <div className="bg-gradient-to-br from-[#3A2E5D] to-[#6B5B95] rounded-2xl p-5 text-white flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div className="flex-1">
+          <div className="font-semibold text-base mb-0.5">PostHog — Visitor Analytics</div>
+          <p className="text-white/70 text-xs">See page views, sessions, traffic sources, and conversion funnels in real-time.</p>
+        </div>
+        <a href="https://us.posthog.com" target="_blank" rel="noopener noreferrer"
           className="flex-shrink-0 flex items-center gap-2 bg-[#EBB99A] text-[#3A2E5D] font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-[#D9956A] transition">
-          <TrendingUp size={14}/> Open Dashboard
+          <Globe size={14}/> Open PostHog
         </a>
       </div>
 
-      {/* What you can track */}
-      <div className="grid sm:grid-cols-2 gap-4">
-        {cards.map(({ icon: Icon, label, desc }) => (
-          <div key={label} className="bg-white border border-[#C8B6E2] rounded-2xl p-5 flex gap-4 items-start">
-            <div className="w-9 h-9 rounded-xl bg-[#E6DDF1] flex items-center justify-center flex-shrink-0">
-              <Icon size={16} className="text-[#6B5B95]"/>
+      {loading ? (
+        <div className="text-center py-10 text-[#9B8AC4] text-sm">Loading analytics…</div>
+      ) : (
+        <>
+          {/* Metric cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {metricCards.map(({ label, value, icon: Icon, color }) => (
+              <div key={label} className="bg-white border border-[#C8B6E2] rounded-2xl p-5">
+                <div className="w-8 h-8 rounded-xl flex items-center justify-center mb-3" style={{ background: color + "22" }}>
+                  <Icon size={15} style={{ color }} />
+                </div>
+                <div className="text-2xl font-bold text-[#3A2E5D]">{value}</div>
+                <div className="text-xs text-[#9B8AC4] mt-0.5">{label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Last 7 days bar chart */}
+          <div className="bg-white border border-[#C8B6E2] rounded-2xl p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div className="font-semibold text-[#3A2E5D] text-sm">Last 7 Days Activity</div>
+              <div className="flex items-center gap-4 text-xs text-[#9B8AC4]">
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#6B5B95] inline-block"/>Bookings</span>
+                <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-[#EBB99A] inline-block"/>Orders</span>
+              </div>
             </div>
-            <div>
-              <div className="font-semibold text-[#3A2E5D] text-sm">{label}</div>
-              <div className="text-xs text-[#9B8AC4] mt-0.5 leading-relaxed">{desc}</div>
+            <div className="flex items-end gap-2" style={{ height: "120px" }}>
+              {last7.map((d) => (
+                <div key={d.key} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                  <div className="w-full flex flex-col gap-0.5 justify-end" style={{ height: "96px" }}>
+                    {d.orders > 0 && (
+                      <div className="w-full rounded-t bg-[#EBB99A]"
+                        style={{ height: `${Math.max(4, (d.orders / maxBar) * 80)}px` }} />
+                    )}
+                    {d.bookings > 0 && (
+                      <div className="w-full rounded-t bg-[#6B5B95]"
+                        style={{ height: `${Math.max(4, (d.bookings / maxBar) * 80)}px` }} />
+                    )}
+                    {d.orders === 0 && d.bookings === 0 && (
+                      <div className="w-full rounded bg-[#E6DDF1]" style={{ height: "4px" }} />
+                    )}
+                  </div>
+                  <div className="text-[10px] text-[#9B8AC4]">{d.label}</div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
 
-      {/* Login tip */}
-      <div className="bg-[#FBF4E8] border border-[#C8B6E2] rounded-2xl p-5 text-sm text-[#3A2E5D]">
-        <p className="font-semibold mb-1">How to log in to PostHog:</p>
-        <ol className="list-decimal list-inside space-y-1 text-[#6B5B95] text-xs">
-          <li>Go to <span className="font-mono">us.posthog.com</span></li>
-          <li>Sign in with the account you used when setting up the site</li>
-          <li>Your project is named after your site — click it to see live data</li>
-        </ol>
-      </div>
+          {/* Recent bookings */}
+          <div className="bg-white border border-[#C8B6E2] rounded-2xl p-5">
+            <div className="font-semibold text-[#3A2E5D] text-sm mb-4">Recent Bookings</div>
+            {recentBookings.length === 0 ? (
+              <p className="text-xs text-[#9B8AC4]">No bookings yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-[#9B8AC4] border-b border-[#C8B6E2]/40">
+                      <th className="pb-2 text-left font-medium">Name</th>
+                      <th className="pb-2 text-left font-medium">Service</th>
+                      <th className="pb-2 text-left font-medium">Date</th>
+                      <th className="pb-2 text-left font-medium">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {recentBookings.map((b, i) => (
+                      <tr key={b.id || i} className="border-b border-[#C8B6E2]/20 last:border-0">
+                        <td className="py-2 text-[#3A2E5D] font-medium">{b.customer_name || b.name || "—"}</td>
+                        <td className="py-2 text-[#6B5B95]">{b.service_name || b.service || "—"}</td>
+                        <td className="py-2 text-[#9B8AC4]">{(b.date || b.created_at || "").slice(0, 10)}</td>
+                        <td className="py-2">
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                            b.status === "confirmed" ? "bg-green-100 text-green-700" :
+                            b.status === "cancelled" ? "bg-red-100 text-red-600" :
+                            "bg-[#E6DDF1] text-[#6B5B95]"
+                          }`}>{b.status || "pending"}</span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1961,9 +2233,10 @@ const TABS = [
   { id:"products",   label:"Products",   icon:Package      },
   { id:"promotions", label:"Promos",     icon:Tag          },
   { id:"schedule",   label:"Schedule",   icon:CalendarDays },
-  { id:"svccat",     label:"Svc Cats",   icon:BookOpen     },
-  { id:"services",   label:"Services",   icon:Sparkles     },
-  { id:"analytics",  label:"Analytics",  icon:TrendingUp   },
+  { id:"svccat",        label:"Svc Cats",      icon:BookOpen        },
+  { id:"services",      label:"Services",      icon:Sparkles        },
+  { id:"testimonials",  label:"Testimonials",  icon:MessageSquare   },
+  { id:"analytics",     label:"Analytics",     icon:TrendingUp      },
 ];
 
 export default function AdminDashboard() {
@@ -2052,9 +2325,10 @@ export default function AdminDashboard() {
               {activeTab === "products"   && <ProductsTab            toast={showToast} />}
               {activeTab === "promotions" && <PromotionsTab          toast={showToast} />}
               {activeTab === "schedule"   && <ScheduleTab            toast={showToast} />}
-              {activeTab === "svccat"     && <ServiceCategoriesTab   toast={showToast} />}
-              {activeTab === "services"   && <ServicesTab            toast={showToast} />}
-              {activeTab === "analytics"  && <AnalyticsTab />}
+              {activeTab === "svccat"        && <ServiceCategoriesTab   toast={showToast} />}
+              {activeTab === "services"      && <ServicesTab            toast={showToast} />}
+              {activeTab === "testimonials"  && <TestimonialsTab        toast={showToast} />}
+              {activeTab === "analytics"     && <AnalyticsTab />}
             </div>
           </div>
         </main>
