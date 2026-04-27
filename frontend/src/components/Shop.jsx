@@ -4,7 +4,6 @@
  * No axios, no sonner — pure fetch API
  */
 import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingCart, Plus, Minus, X, Sparkles, Package,
@@ -924,11 +923,18 @@ function CategoryView({ cat, cartCount, onBack, onOpenCart, addToCart, cartQtyFo
   );
 }
 
+// ── Silent URL helper ────────────────────────────────────────────────────────
+// Updates the browser address bar WITHOUT remounting the page.
+// Using React Router's navigate() would cause the entire page to re-render and
+// scroll back to the top — pushState changes the URL silently in-place.
+function pushUrl(path) {
+  try { window.history.pushState(null, "", path); } catch (_) {}
+}
+
 // ════════════════════════════════════════════════════════════════════════════
 // MAIN SHOP COMPONENT
 // ════════════════════════════════════════════════════════════════════════════
 export default function Shop({ initialCategoryId, initialProductId }) {
-  const navigate = useNavigate();
 
   const [categories, setCategories] = useState([]);
   const [allTags, setAllTags]       = useState([]);
@@ -1017,42 +1023,37 @@ export default function Shop({ initialCategoryId, initialProductId }) {
     setOrderDone(true); setTimeout(() => setOrderDone(false), 6000);
   };
 
-  // Navigation helpers — update both state AND browser URL
+  // Navigation helpers — update state AND URL bar (silently, no page remount)
   const openCategory = useCallback((cat) => {
     setSelectedCategory(cat);
     setView("category");
-    navigate(`/shop/${cat.id}`, { replace: false });
-  }, [navigate]);
+    pushUrl(`/shop/${cat.id}`);
+  }, []);
 
   const openTag = useCallback((tag) => {
     setActiveTag(tag);
     setView("tag");
-    // Tags don't get their own shareable URL (they're a filter, not a page)
+    pushUrl(`/shop?tag=${encodeURIComponent(tag)}`);
   }, []);
 
   const goHome = useCallback(() => {
     setView("home");
     setSelectedCategory(null);
     setActiveTag(null);
-    navigate("/shop", { replace: false });
-  }, [navigate]);
+    pushUrl("/shop");
+  }, []);
 
-  // Open product detail — updates URL so sharing works
+  // Open product detail — updates URL so the link is shareable
   const openDetail = useCallback((productId) => {
     setDetailProductId(productId);
-    navigate(`/product/${productId}`, { replace: false });
-  }, [navigate]);
+    pushUrl(`/product/${productId}`);
+  }, []);
 
-  // Close product detail — go back in history if possible, else to /shop
+  // Close product detail — silently go back to previous URL
   const closeDetail = useCallback(() => {
     setDetailProductId(null);
-    // If there's a history entry to go back to, go back; otherwise land on /shop
-    if (window.history.length > 1) {
-      navigate(-1);
-    } else {
-      navigate("/shop", { replace: true });
-    }
-  }, [navigate]);
+    window.history.back();
+  }, []);
 
   return (
     <section id="shop" className="relative py-20 sm:py-28 bg-gradient-to-b from-[#FBF4E8] via-[#F5EEF8] to-[#FBF4E8] min-h-screen">
