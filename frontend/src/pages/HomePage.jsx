@@ -3,9 +3,9 @@
  *
  * URL structure this page owns:
  *   /                    → homepage (default)
- *   /shop                → scroll to shop
- *   /shop/:catId         → scroll to shop + open that category
- *   /product/:productId  → scroll to shop + open product modal
+ *   /shop                → homepage, scrolls to shop
+ *   /shop/:catId         → homepage, opens category
+ *   /product/:productId  → homepage, opens product modal
  *   /book                → open booking dialog (no pre-selected service)
  *   /book/:serviceId     → open booking dialog pre-selected to that service
  *
@@ -15,20 +15,21 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Toaster } from "sonner";
-import Header from "@/components/Header";
-import Hero from "@/components/Hero";
+import Header      from "@/components/Header";
+import Hero        from "@/components/Hero";
 import HeroMarquee from "@/components/HeroMarquee";
-import About from "@/components/About";
-import Gallery from "@/components/Gallery";
-import SocialFeed from "@/components/SocialFeed";
-import HowItWorks from "@/components/HowItWorks";
-import Shop from "@/components/Shop";
-import Footer from "@/components/Footer";
-import FAQ from "@/components/FAQ";
-import Contact from "@/components/Contact";
+import About       from "@/components/About";
+import Gallery     from "@/components/Gallery";
+import Services    from "@/components/Services";
+import HowItWorks  from "@/components/HowItWorks";
+import Shop        from "@/components/Shop";
+import Testimonials from "@/components/Testimonials";
+import FAQ         from "@/components/FAQ";
+import SocialFeed  from "@/components/SocialFeed";
+import Contact     from "@/components/Contact";
+import Footer      from "@/components/Footer";
 import BookingDialog from "@/components/BookingDialog";
 import PromoBanner from "@/components/PromoBanner";
-import Testimonials from "@/components/Testimonials";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -52,16 +53,13 @@ export default function HomePage({ scrollToShop, openBooking }) {
   const [testimonials, setTestimonials]     = useState([]);
   const [initialService, setInitialService] = useState(null);
 
-  // The URL we were at before the booking dialog was opened.
-  // We restore it when the dialog closes so the user lands back
-  // on /shop/oils (or wherever they were) instead of /book.
   const returnUrlRef = useRef("/");
   const shopRef      = useRef(null);
 
   // ── Load data ─────────────────────────────────────────────────────────────
   useEffect(() => {
-    apiFetch("/categories").then((r) => setCategories(Array.isArray(r) ? r : []));
-    apiFetch("/services").then((r)   => setServices(Array.isArray(r) ? r : []));
+    apiFetch("/categories").then((r)   => setCategories(Array.isArray(r) ? r : []));
+    apiFetch("/services").then((r)     => setServices(Array.isArray(r) ? r : []));
     apiFetch("/testimonials").then((r) => setTestimonials(Array.isArray(r) ? r : []));
   }, []);
 
@@ -85,7 +83,7 @@ export default function HomePage({ scrollToShop, openBooking }) {
     }
   }, [openBooking, serviceId, services.length]);
 
-  // ── Scroll to #shop section for /shop/* and /product/* routes ─────────────
+  // ── Scroll to #shop for /shop/* and /product/* routes ────────────────────
   useEffect(() => {
     if (!scrollToShop) return;
     const el = shopRef.current || document.getElementById("shop");
@@ -94,13 +92,10 @@ export default function HomePage({ scrollToShop, openBooking }) {
     return () => clearTimeout(t);
   }, [scrollToShop]);
 
-  // ── Popstate: browser back button handling ────────────────────────────────
-  // If back is pressed while booking is open and the URL lands outside /book,
-  // close the dialog. The URL is already updated by the browser.
+  // ── Popstate: browser back button ────────────────────────────────────────
   useEffect(() => {
     function handlePop() {
-      const path = window.location.pathname;
-      if (!path.startsWith("/book")) {
+      if (!window.location.pathname.startsWith("/book")) {
         setBookingOpen(false);
         setInitialService(null);
       }
@@ -110,7 +105,6 @@ export default function HomePage({ scrollToShop, openBooking }) {
   }, []);
 
   // ── Open booking dialog ───────────────────────────────────────────────────
-  // Captures the current URL so we can restore it on close.
   const openBookingDialog = useCallback((svc = null) => {
     returnUrlRef.current = window.location.pathname + window.location.search;
     setInitialService(svc || null);
@@ -118,13 +112,10 @@ export default function HomePage({ scrollToShop, openBooking }) {
     pushUrl(svc ? `/book/${svc.id}` : "/book");
   }, []);
 
-  // ── Called when user picks a specific service inside the dialog ───────────
-  // Keeps the URL in sync with whichever service they selected.
   const handleServiceSelected = useCallback((svcId) => {
     pushUrl(`/book/${svcId}`);
   }, []);
 
-  // ── Close booking dialog & restore the previous URL ───────────────────────
   const handleBookingClose = useCallback((open) => {
     if (!open) {
       setBookingOpen(false);
@@ -140,14 +131,20 @@ export default function HomePage({ scrollToShop, openBooking }) {
       <Toaster position="top-center" richColors />
       <PromoBanner />
       <Header onBookNow={() => openBookingDialog()} />
+
       <main>
-        <Hero onBookNow={() => openBookingDialog()} />
+        <Hero        onBookNow={() => openBookingDialog()} />
         <HeroMarquee />
         <About />
         <Gallery />
+
+        {/* Services — the bookable offerings (id="services" for nav) */}
+        <Services onBookNow={openBookingDialog} />
+
+        {/* How it works — the booking process steps */}
         <HowItWorks />
 
-        {/* Shop receives deep-link initial state from URL params */}
+        {/* Shop — crystals, oils, products */}
         <div ref={shopRef}>
           <Shop
             initialCategoryId={catId || null}
@@ -156,11 +153,14 @@ export default function HomePage({ scrollToShop, openBooking }) {
           />
         </div>
 
+        {/* Testimonials — double-row marquee */}
         <Testimonials items={testimonials} />
+
         <FAQ />
         <SocialFeed />
         <Contact onBookNow={() => openBookingDialog()} />
       </main>
+
       <Footer />
 
       <BookingDialog
