@@ -36,17 +36,17 @@ export const TRUST_STATS = [
 
 export const GALLERY = [
   {
-    src: "https://images.unsplash.com/photo-1518173946687-a4c8892bbd9f?w=600&q=80",
+    src: "/gallery1.jpg",
     label: "Live Session",
     caption: "One-on-one soul readings",
   },
   {
-    src: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80",
+    src: "/gallery2.jpg",
     label: "Workshop",
     caption: "Speaking to hundreds with clarity",
   },
   {
-    src: "https://images.unsplash.com/photo-1528360983277-13d401cdc186?w=600&q=80",
+    src: "/gallery3.jpg",
     label: "Healing Circle",
     caption: "Guiding group energy journeys",
   },
