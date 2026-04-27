@@ -1,5 +1,16 @@
+/**
+ * BookingDialog.jsx — multi-step booking flow
+ *
+ * Props:
+ *   open              boolean          — whether the dialog is visible
+ *   onOpenChange      (open) => void   — called when dialog should open/close
+ *   categories        []               — booking categories
+ *   services          []               — all services
+ *   initialService    object|null      — pre-select a service on open
+ *   onServiceSelected (serviceId) => void — fired when user picks a service
+ *                                          so the parent can update the URL
+ */
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
 import {
   Dialog,
   DialogContent,
@@ -34,6 +45,21 @@ const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 const RAZORPAY_KEY_ID =
   process.env.REACT_APP_RAZORPAY_KEY_ID || "rzp_test_PLACEHOLDER";
 
+// ── Small fetch helper ────────────────────────────────────────────────────────
+async function apiFetch(path, options = {}) {
+  const res = await fetch(`${API}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const err = new Error(data.detail || "Request failed");
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
 const CATEGORY_META = {
   tarot_numerology_call: {
     icon: Stars,
@@ -61,15 +87,15 @@ const CATEGORY_META = {
   },
 };
 
-const STEPS_LIVE = ["category", "service", "schedule", "details", "pay"];
+const STEPS_LIVE  = ["category", "service", "schedule", "details", "pay"];
 const STEPS_VOICE = ["category", "service", "details", "pay"];
 
 const STEP_LABELS = {
   category: "Choose a Category",
-  service: "Choose a Variant",
+  service:  "Choose a Variant",
   schedule: "Pick a Date & Time",
-  details: "Your Details",
-  pay: "Confirm & Pay",
+  details:  "Your Details",
+  pay:      "Confirm & Pay",
 };
 
 function Stepper({ current, steps }) {
@@ -89,9 +115,7 @@ function Stepper({ current, steps }) {
             {i < current ? <Check size={14} strokeWidth={3} /> : i + 1}
           </div>
           {i < steps.length - 1 && (
-            <div
-              className={`h-0.5 w-8 sm:w-12 ${i < current ? "bg-[#EBB99A]" : "bg-white/30"}`}
-            />
+            <div className={`h-0.5 w-8 sm:w-12 ${i < current ? "bg-[#EBB99A]" : "bg-white/30"}`} />
           )}
         </React.Fragment>
       ))}
@@ -106,101 +130,90 @@ export default function BookingDialog({
   initialCategoryId,
   categories,
   services,
+  onServiceSelected,
 }) {
-  const [selectedService, setSelectedService] = useState(initialService || null);
+  const [selectedService, setSelectedService]     = useState(initialService || null);
   const [selectedCategoryId, setSelectedCategoryId] = useState(
     initialCategoryId || initialService?.category || null
   );
   const isVoiceNote = !!selectedService?.is_voice_note;
   const STEPS = isVoiceNote ? STEPS_VOICE : STEPS_LIVE;
 
-  const [step, setStep] = useState(0);
-  const [date, setDate] = useState(null);
-  const [slot, setSlot] = useState(null);
-  const [slots, setSlots] = useState([]);
+  const [step, setStep]               = useState(0);
+  const [date, setDate]               = useState(null);
+  const [slot, setSlot]               = useState(null);
+  const [slots, setSlots]             = useState([]);
   const [blockedDates, setBlockedDates] = useState([]);
   const [loadingSlots, setLoadingSlots] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [couponCode, setCouponCode] = useState("");
-  const [couponInfo, setCouponInfo] = useState(null); // {discount_inr, final_inr, title}
+  const [submitting, setSubmitting]   = useState(false);
+  const [couponCode, setCouponCode]   = useState("");
+  const [couponInfo, setCouponInfo]   = useState(null);
   const [couponLoading, setCouponLoading] = useState(false);
 
   const [form, setForm] = useState({
-    customer_name: "",
+    customer_name:  "",
     customer_email: "",
     customer_phone: "",
-    birth_date: "",
-    birth_time: "",
-    birth_place: "",
-    question: "",
-    notes: "",
+    birth_date:     "",
+    birth_time:     "",
+    birth_place:    "",
+    question:       "",
+    notes:          "",
   });
 
-  // Reset state on open
+  // ── Reset state every time the dialog opens ───────────────────────────────
   useEffect(() => {
-    if (open) {
-      setSelectedService(initialService || null);
-      setSelectedCategoryId(
-        initialCategoryId || initialService?.category || null
-      );
-      // initialService → jump to schedule (live) / details (voice note)
-      // initialCategoryId → jump to service step
-      // otherwise start at category
-      if (initialService) {
-        setStep(2); // service was selected, go to schedule (live) or details (voice handled by STEPS array)
-      } else if (initialCategoryId) {
-        setStep(1);
-      } else {
-        setStep(0);
-      }
-      setDate(null);
-      setSlot(null);
-      setSlots([]);
-      setCouponCode("");
-      setCouponInfo(null);
-      setForm({
-        customer_name: "",
-        customer_email: "",
-        customer_phone: "",
-        birth_date: "",
-        birth_time: "",
-        birth_place: "",
-        question: "",
-        notes: "",
-      });
-      // fetch blocked dates so calendar can disable them
-      axios
-        .get(`${API}/blocked-dates`)
-        .then((r) => setBlockedDates(r.data || []))
-        .catch(() => setBlockedDates([]));
+    if (!open) return;
+
+    setSelectedService(initialService || null);
+    setSelectedCategoryId(initialCategoryId || initialService?.category || null);
+
+    if (initialService) {
+      setStep(2); // jump past category + service to schedule/details
+    } else if (initialCategoryId) {
+      setStep(1);
+    } else {
+      setStep(0);
     }
+
+    setDate(null);
+    setSlot(null);
+    setSlots([]);
+    setCouponCode("");
+    setCouponInfo(null);
+    setForm({
+      customer_name:  "",
+      customer_email: "",
+      customer_phone: "",
+      birth_date:     "",
+      birth_time:     "",
+      birth_place:    "",
+      question:       "",
+      notes:          "",
+    });
+
+    // Fetch admin-blocked dates so calendar can disable them
+    apiFetch("/blocked-dates")
+      .then((data) => setBlockedDates(Array.isArray(data) ? data : []))
+      .catch(() => setBlockedDates([]));
   }, [open, initialService, initialCategoryId]);
 
-  // When service is set without a step jump, advance properly
+  // ── Fetch time slots when a date is selected ──────────────────────────────
   useEffect(() => {
-    // No-op: handled by direct step setters at click time
-  }, [selectedService]); // eslint-disable-line
-
-  // Fetch slots when date is picked
-  useEffect(() => {
-    async function fetchSlots() {
-      if (!date || isVoiceNote) return;
-      setLoadingSlots(true);
-      try {
-        const ds = format(date, "yyyy-MM-dd");
-        const res = await axios.get(`${API}/slots/${ds}`);
-        if (!res.data.is_open) {
-          setSlots([]);
-        } else {
-          setSlots(res.data.slots);
-        }
-      } catch (e) {
-        toast.error("Could not load slots, please try another date.");
-      } finally {
-        setLoadingSlots(false);
-      }
-    }
-    fetchSlots();
+    if (!date || isVoiceNote) return;
+    let alive = true;
+    setLoadingSlots(true);
+    const ds = format(date, "yyyy-MM-dd");
+    apiFetch(`/slots/${ds}`)
+      .then((data) => {
+        if (!alive) return;
+        setSlots(data.is_open ? (data.slots || []) : []);
+      })
+      .catch(() => {
+        if (alive) toast.error("Could not load slots, please try another date.");
+      })
+      .finally(() => { if (alive) setLoadingSlots(false); });
+    return () => { alive = false; };
   }, [date, isVoiceNote]);
 
   const stepLabel = useMemo(() => {
@@ -211,78 +224,83 @@ export default function BookingDialog({
   const canNext = useMemo(() => {
     const cur = STEPS[step];
     if (cur === "category") return !!selectedCategoryId;
-    if (cur === "service") return !!selectedService;
+    if (cur === "service")  return !!selectedService;
     if (cur === "schedule") return !!date && !!slot;
     if (cur === "details") {
-      const ok =
+      return (
         form.customer_name.trim().length > 1 &&
         /^\S+@\S+\.\S+$/.test(form.customer_email) &&
-        form.customer_phone.trim().length >= 7;
-      return ok;
+        form.customer_phone.trim().length >= 7
+      );
     }
     return true;
   }, [step, STEPS, selectedCategoryId, selectedService, date, slot, form]);
 
-  const goNext = () => {
-    if (!canNext) return;
-    if (step < STEPS.length - 1) setStep(step + 1);
-  };
-  const goBack = () => {
-    if (step > 0) setStep(step - 1);
-  };
+  const goNext = () => { if (canNext && step < STEPS.length - 1) setStep(step + 1); };
+  const goBack = () => { if (step > 0) setStep(step - 1); };
 
+  // ── Apply coupon ──────────────────────────────────────────────────────────
   const applyCoupon = async (codeArg) => {
     const code = (codeArg || couponCode || "").trim().toUpperCase();
     if (!code || !selectedService) return;
     setCouponCode(code);
     setCouponLoading(true);
     try {
-      const res = await axios.post(`${API}/promotions/validate`, {
-        code,
-        kind: "services",
-        base_inr: selectedService.price_inr,
-        target_id: selectedService.id,
+      const data = await apiFetch("/promotions/validate", {
+        method: "POST",
+        body: JSON.stringify({
+          code,
+          kind:        "services",
+          base_inr:    selectedService.price_inr,
+          target_id:   selectedService.id,
+        }),
       });
-      setCouponInfo(res.data);
-      toast.success(`Coupon applied — saved ₹${res.data.discount_inr.toLocaleString("en-IN")} ✦`);
+      setCouponInfo(data);
+      toast.success(`Coupon applied — saved \u20B9${data.discount_inr.toLocaleString("en-IN")} \u2726`);
     } catch (e) {
       setCouponInfo(null);
-      toast.error(e?.response?.data?.detail || "Invalid coupon");
+      toast.error(e.data?.detail || "Invalid coupon");
     } finally {
       setCouponLoading(false);
     }
   };
 
+  // ── Payment flow ──────────────────────────────────────────────────────────
   const handlePay = async () => {
     if (!selectedService) return;
     setSubmitting(true);
     try {
       const payload = {
-        service_id: selectedService.id,
-        customer_name: form.customer_name.trim(),
-        customer_email: form.customer_email.trim(),
-        customer_phone: form.customer_phone.trim(),
-        booking_date: isVoiceNote ? null : format(date, "yyyy-MM-dd"),
-        booking_slot: isVoiceNote ? null : slot,
-        birth_date: form.birth_date || null,
-        birth_time: form.birth_time || null,
-        birth_place: form.birth_place || null,
-        question: form.question || null,
-        notes: form.notes || null,
-        coupon_code: couponInfo ? couponCode.trim().toUpperCase() : null,
+        service_id:      selectedService.id,
+        customer_name:   form.customer_name.trim(),
+        customer_email:  form.customer_email.trim(),
+        customer_phone:  form.customer_phone.trim(),
+        booking_date:    isVoiceNote ? null : format(date, "yyyy-MM-dd"),
+        booking_slot:    isVoiceNote ? null : slot,
+        birth_date:      form.birth_date  || null,
+        birth_time:      form.birth_time  || null,
+        birth_place:     form.birth_place || null,
+        question:        form.question    || null,
+        notes:           form.notes       || null,
+        coupon_code:     couponInfo ? couponCode.trim().toUpperCase() : null,
       };
-      const res = await axios.post(`${API}/bookings/create-order`, payload);
-      const { booking_id, razorpay_order_id, amount_paise, is_mock, razorpay_key_id } =
-        res.data;
+
+      const res = await apiFetch("/bookings/create-order", {
+        method: "POST",
+        body:   JSON.stringify(payload),
+      });
+      const { booking_id, razorpay_order_id, amount_paise, is_mock, razorpay_key_id } = res;
 
       if (is_mock) {
-        // Mock payment success
-        await axios.post(`${API}/bookings/verify-payment`, {
-          booking_id,
-          razorpay_order_id,
-          razorpay_payment_id: `pay_mock_${Date.now()}`,
+        await apiFetch("/bookings/verify-payment", {
+          method: "POST",
+          body: JSON.stringify({
+            booking_id,
+            razorpay_order_id,
+            razorpay_payment_id: `pay_mock_${Date.now()}`,
+          }),
         });
-        toast.success("Booking confirmed (mock payment) ✦", {
+        toast.success("Booking confirmed (mock payment) \u2726", {
           description: `We'll reach out on WhatsApp at ${form.customer_phone}.`,
         });
         onOpenChange(false);
@@ -291,52 +309,48 @@ export default function BookingDialog({
 
       if (!window.Razorpay) {
         toast.error("Payment SDK not loaded. Please refresh.");
+        setSubmitting(false);
         return;
       }
 
       const isMobile =
         typeof navigator !== "undefined" &&
         /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
-      // IMPORTANT: Razorpay's redirect-mode `callback_url` receives the payment
-      // signature via a server-to-server **POST**. SPAs can't accept POSTs, so
-      // we point it at our FastAPI route which verifies the signature, finalizes
-      // the booking, and 303-redirects the customer back to /payment-success.
+
       const callbackUrl = `${API}/bookings/payment-callback?booking_id=${encodeURIComponent(booking_id)}`;
 
       const options = {
-        key: razorpay_key_id || RAZORPAY_KEY_ID,
-        amount: amount_paise,
-        currency: "INR",
-        name: BRAND.name,
+        key:         razorpay_key_id || RAZORPAY_KEY_ID,
+        amount:      amount_paise,
+        currency:    "INR",
+        name:        BRAND.name,
         description: selectedService.name,
-        order_id: razorpay_order_id,
+        order_id:    razorpay_order_id,
         prefill: {
-          name: form.customer_name,
-          email: form.customer_email,
+          name:    form.customer_name,
+          email:   form.customer_email,
           contact: form.customer_phone,
         },
-        notes: {
-          booking_id,
-          service: selectedService.name,
-        },
+        notes: { booking_id, service: selectedService.name },
         theme: { color: "#6B5B95" },
-        // Mobile uses redirect mode for rock-solid UPI / GPay flow.
-        // Desktop keeps the inline modal for a slicker experience.
         ...(isMobile
           ? { redirect: true, callback_url: callbackUrl }
           : {
               handler: async function (response) {
                 try {
-                  await axios.post(`${API}/bookings/verify-payment`, {
-                    booking_id,
-                    razorpay_order_id: response.razorpay_order_id,
-                    razorpay_payment_id: response.razorpay_payment_id,
-                    razorpay_signature: response.razorpay_signature,
+                  await apiFetch("/bookings/verify-payment", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      booking_id,
+                      razorpay_order_id:    response.razorpay_order_id,
+                      razorpay_payment_id:  response.razorpay_payment_id,
+                      razorpay_signature:   response.razorpay_signature,
+                    }),
                   });
-                  toast.success("Booking confirmed ✦", {
+                  toast.success("Booking confirmed \u2726", {
                     description: "Check your email for confirmation.",
                   });
-                } catch (err) {
+                } catch {
                   toast.error("Payment verification failed");
                 }
               },
@@ -348,23 +362,19 @@ export default function BookingDialog({
         },
       };
 
-      // Close our Radix dialog FIRST so it stops scroll-locking the body and
-      // un-aria-hides siblings — Razorpay's checkout iframe is appended at
-      // body root and on mobile Chrome that conflict often makes it unclickable.
+      // Close Radix dialog first so it doesn't block Razorpay's iframe
       onOpenChange(false);
-
-      // Defer the Razorpay open by one tick so Radix has time to unmount.
       setTimeout(() => {
         try {
           const rzp = new window.Razorpay(options);
           rzp.open();
-        } catch (err) {
+        } catch {
           toast.error("Could not open payment window");
         }
         setSubmitting(false);
       }, 60);
     } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not start booking");
+      toast.error(e.data?.detail || "Could not start booking");
       setSubmitting(false);
     }
   };
@@ -377,12 +387,11 @@ export default function BookingDialog({
     today.setHours(0, 0, 0, 0);
     const max = new Date();
     max.setMonth(max.getMonth() + 2);
-    const dayStr = format(d, "yyyy-MM-dd");
     return (
       d < today ||
-      d > max ||
+      d > max   ||
       d.getDay() === 0 ||
-      blockedDates.includes(dayStr)
+      blockedDates.includes(format(d, "yyyy-MM-dd"))
     );
   };
 
@@ -392,9 +401,8 @@ export default function BookingDialog({
         data-testid="booking-dialog"
         className="max-w-2xl !bg-[#FFFFFF] border-0 rounded-3xl p-0 overflow-hidden shadow-[0_30px_80px_-20px_rgba(58,46,93,0.6)]"
       >
-        {/* Rich lavender header with peach accent */}
+        {/* Rich lavender header */}
         <div className="relative bg-gradient-to-br from-[#6B5B95] via-[#9B8AC4] to-[#6B5B95] px-6 sm:px-8 pt-7 pb-6">
-          {/* Decorative peach blur */}
           <div className="absolute -top-12 -right-8 w-44 h-44 rounded-full bg-[#EBB99A]/40 blur-3xl pointer-events-none" />
           <div className="absolute -bottom-16 -left-10 w-44 h-44 rounded-full bg-[#F4C6D6]/40 blur-3xl pointer-events-none" />
 
@@ -417,11 +425,13 @@ export default function BookingDialog({
         </div>
 
         <div className="px-6 sm:px-8 py-7 max-h-[60vh] overflow-y-auto bg-[#FFFFFF]">
+
+          {/* ── STEP: category ─────────────────────────────────────────────── */}
           {cur === "category" && (
             <div data-testid="step-category" className="grid sm:grid-cols-2 gap-3">
               {categories?.map((c) => {
-                const meta = CATEGORY_META[c.id] || CATEGORY_META.tarot_numerology;
-                const Icon = meta.icon;
+                const meta   = CATEGORY_META[c.id] || CATEGORY_META.tarot_numerology_call;
+                const Icon   = meta.icon;
                 const minPrice = c.services?.length
                   ? Math.min(...c.services.map((s) => s.price_inr))
                   : 0;
@@ -429,10 +439,7 @@ export default function BookingDialog({
                   <button
                     key={c.id}
                     data-testid={`pick-category-${c.id}`}
-                    onClick={() => {
-                      setSelectedCategoryId(c.id);
-                      setStep(1);
-                    }}
+                    onClick={() => { setSelectedCategoryId(c.id); setStep(1); }}
                     className="group text-left rounded-2xl border-2 border-[#EBB99A]/30 hover:border-[#6B5B95] hover:-translate-y-0.5 transition shadow-soft hover:shadow-[0_12px_28px_-8px_rgba(107,91,149,0.3)] overflow-hidden"
                   >
                     <div className={`bg-gradient-to-br ${meta.gradient} px-5 py-4 relative`}>
@@ -463,6 +470,7 @@ export default function BookingDialog({
             </div>
           )}
 
+          {/* ── STEP: service ──────────────────────────────────────────────── */}
           {cur === "service" && (
             <div data-testid="step-service" className="grid gap-3">
               {(selectedCategoryId
@@ -474,6 +482,8 @@ export default function BookingDialog({
                   data-testid={`pick-service-${s.id}`}
                   onClick={() => {
                     setSelectedService(s);
+                    // Notify parent so it can update URL to /book/:serviceId
+                    if (onServiceSelected) onServiceSelected(s.id);
                     setStep(2);
                   }}
                   className="group text-left rounded-2xl border-2 border-[#EBB99A]/30 bg-gradient-to-r from-[#FBF4E8] to-white px-5 py-4 hover:border-[#6B5B95] hover:shadow-[0_8px_24px_-8px_rgba(107,91,149,0.3)] hover:-translate-y-0.5 transition flex items-center justify-between gap-4"
@@ -486,9 +496,7 @@ export default function BookingDialog({
                       <div className="text-[10px] uppercase tracking-[0.22em] text-[#D9A382] font-bold">
                         {s.is_voice_note ? "Voice Note · 48 hr delivery" : `${s.duration_minutes} min · Live call`}
                       </div>
-                      <div className="font-display text-base text-[#3A2E5D] mt-0.5">
-                        {s.name}
-                      </div>
+                      <div className="font-display text-base text-[#3A2E5D] mt-0.5">{s.name}</div>
                     </div>
                   </div>
                   <div className="text-right">
@@ -504,6 +512,7 @@ export default function BookingDialog({
             </div>
           )}
 
+          {/* ── STEP: schedule ─────────────────────────────────────────────── */}
           {cur === "schedule" && (
             <div data-testid="step-schedule" className="grid sm:grid-cols-2 gap-6">
               <div>
@@ -514,10 +523,7 @@ export default function BookingDialog({
                   <Calendar
                     mode="single"
                     selected={date}
-                    onSelect={(d) => {
-                      setDate(d);
-                      setSlot(null);
-                    }}
+                    onSelect={(d) => { setDate(d); setSlot(null); }}
                     disabled={disablePast}
                     className="rounded-2xl bg-[#FBF4E8]"
                     data-testid="booking-calendar"
@@ -566,6 +572,7 @@ export default function BookingDialog({
             </div>
           )}
 
+          {/* ── STEP: details ──────────────────────────────────────────────── */}
           {cur === "details" && (
             <div data-testid="step-details" className="grid sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
@@ -577,9 +584,7 @@ export default function BookingDialog({
                   data-testid="input-name"
                   placeholder="Your beautiful name"
                   value={form.customer_name}
-                  onChange={(e) =>
-                    setForm({ ...form, customer_name: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, customer_name: e.target.value })}
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
@@ -593,9 +598,7 @@ export default function BookingDialog({
                   data-testid="input-email"
                   placeholder="you@example.com"
                   value={form.customer_email}
-                  onChange={(e) =>
-                    setForm({ ...form, customer_email: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, customer_email: e.target.value })}
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
@@ -608,9 +611,7 @@ export default function BookingDialog({
                   data-testid="input-phone"
                   placeholder="+91 98XXX XXXXX"
                   value={form.customer_phone}
-                  onChange={(e) =>
-                    setForm({ ...form, customer_phone: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, customer_phone: e.target.value })}
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
@@ -623,9 +624,7 @@ export default function BookingDialog({
                   type="date"
                   data-testid="input-birth-date"
                   value={form.birth_date}
-                  onChange={(e) =>
-                    setForm({ ...form, birth_date: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, birth_date: e.target.value })}
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep h-11"
                 />
               </div>
@@ -639,15 +638,14 @@ export default function BookingDialog({
                   placeholder="Share what's on your heart…"
                   rows={3}
                   value={form.question}
-                  onChange={(e) =>
-                    setForm({ ...form, question: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, question: e.target.value })}
                   className="mt-2 rounded-xl bg-[#FBF4E8] border-2 border-peach/40 text-ink-plum placeholder:text-ink-plum/40 focus-visible:ring-2 focus-visible:ring-peach focus-visible:border-lavender-deep"
                 />
               </div>
             </div>
           )}
 
+          {/* ── STEP: pay ──────────────────────────────────────────────────── */}
           {cur === "pay" && (
             <div data-testid="step-pay" className="space-y-5">
               <div className="rounded-2xl bg-gradient-to-br from-[#FBF4E8] via-white to-[#F4C6D6]/15 border-2 border-[#EBB99A]/40 p-6 shadow-[0_4px_18px_-4px_rgba(107,91,149,0.15)]">
@@ -657,9 +655,7 @@ export default function BookingDialog({
                 <div className="mt-4 grid sm:grid-cols-2 gap-4 text-sm">
                   <div className="bg-white/60 rounded-xl px-4 py-3 border border-[#EBB99A]/20">
                     <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">Service</div>
-                    <div className="font-display text-lg text-[#3A2E5D] mt-1">
-                      {selectedService?.name}
-                    </div>
+                    <div className="font-display text-lg text-[#3A2E5D] mt-1">{selectedService?.name}</div>
                   </div>
                   {!isVoiceNote && date && slot && (
                     <div className="bg-white/60 rounded-xl px-4 py-3 border border-[#EBB99A]/20">
@@ -671,9 +667,7 @@ export default function BookingDialog({
                   )}
                   <div className="bg-white/60 rounded-xl px-4 py-3 border border-[#EBB99A]/20">
                     <div className="text-[#9B8AC4] text-[10px] uppercase tracking-[0.2em] font-bold">For</div>
-                    <div className="text-[#3A2E5D] mt-1">
-                      {form.customer_name}
-                    </div>
+                    <div className="text-[#3A2E5D] mt-1">{form.customer_name}</div>
                     <div className="text-[#3A2E5D]/70 text-xs">{form.customer_email}</div>
                   </div>
                   <div className="bg-white/60 rounded-xl px-4 py-3 border border-[#EBB99A]/20">
@@ -687,11 +681,7 @@ export default function BookingDialog({
                     <div className="flex items-center justify-between text-sm">
                       <div className="text-emerald-700 inline-flex items-center gap-2">
                         <Sparkles size={14} className="text-[#EBB99A]" />
-                        Coupon{" "}
-                        <span className="font-mono font-bold">
-                          {couponCode.toUpperCase()}
-                        </span>{" "}
-                        applied
+                        Coupon <span className="font-mono font-bold">{couponCode.toUpperCase()}</span> applied
                       </div>
                       <div className="text-emerald-700 font-medium">
                         − ₹{couponInfo.discount_inr.toLocaleString("en-IN")}
@@ -703,11 +693,7 @@ export default function BookingDialog({
                       {couponInfo ? "Final amount" : "Total payable"}
                     </div>
                     <div className="font-display text-3xl bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] bg-clip-text text-transparent">
-                      ₹
-                      {(couponInfo
-                        ? couponInfo.final_inr
-                        : selectedService?.price_inr || 0
-                      ).toLocaleString("en-IN")}
+                      ₹{(couponInfo ? couponInfo.final_inr : selectedService?.price_inr || 0).toLocaleString("en-IN")}
                     </div>
                   </div>
                 </div>
@@ -747,13 +733,11 @@ export default function BookingDialog({
                   </div>
                 </div>
               )}
+
               {couponInfo && (
                 <button
                   type="button"
-                  onClick={() => {
-                    setCouponInfo(null);
-                    setCouponCode("");
-                  }}
+                  onClick={() => { setCouponInfo(null); setCouponCode(""); }}
                   className="text-xs text-ink-plum/60 hover:text-red-500 underline"
                 >
                   Remove coupon
@@ -765,13 +749,15 @@ export default function BookingDialog({
                   <Sparkles size={16} />
                 </div>
                 <div className="leading-relaxed">
-                  Secure payment powered by <span className="font-semibold text-[#6B5B95]">Razorpay</span> — UPI, cards, netbanking, wallets. You'll receive WhatsApp + email confirmation immediately after payment.
+                  Secure payment powered by <span className="font-semibold text-[#6B5B95]">Razorpay</span> — UPI, cards, netbanking, wallets.
+                  You'll receive WhatsApp + email confirmation immediately after payment.
                 </div>
               </div>
             </div>
           )}
         </div>
 
+        {/* Footer bar */}
         <div className="border-t-2 border-[#EBB99A]/30 bg-gradient-to-r from-[#FBF4E8] to-[#F5EAD6] px-6 sm:px-8 py-4 flex items-center justify-between gap-3">
           <Button
             variant="ghost"
@@ -790,15 +776,8 @@ export default function BookingDialog({
               onClick={handlePay}
               className="bg-gradient-to-r from-[#6B5B95] to-[#9B8AC4] hover:from-[#5A4C7E] hover:to-[#6B5B95] text-white rounded-full px-8 py-2.5 shadow-[0_8px_24px_-8px_rgba(107,91,149,0.6)] font-medium"
             >
-              {submitting ? (
-                <Loader2 className="animate-spin mr-2" size={16} />
-              ) : null}
-              Pay ₹
-              {(couponInfo
-                ? couponInfo.final_inr
-                : selectedService?.price_inr || 0
-              ).toLocaleString("en-IN")}{" "}
-              ✦
+              {submitting ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+              Pay ₹{(couponInfo ? couponInfo.final_inr : selectedService?.price_inr || 0).toLocaleString("en-IN")} ✦
             </Button>
           ) : (
             <Button
