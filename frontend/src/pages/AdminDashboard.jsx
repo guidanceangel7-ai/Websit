@@ -11,6 +11,7 @@ import {
   X, Plus, Trash2, Download, Sparkles, ShoppingBag, Check,
   Layers, ChevronDown, ChevronUp, ImagePlus, FolderOpen, Edit2,
   ZoomIn, ZoomOut, Move, Crop, RotateCcw, CalendarDays, CalendarX,
+  TrendingUp, Users, Eye, Globe,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -1891,6 +1892,65 @@ function ServicesTab({ toast }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// ANALYTICS TAB — PostHog is already tracking. This tab shows the dashboard
+// link and key tips.
+// ════════════════════════════════════════════════════════════════════════════
+function AnalyticsTab() {
+  const posthogUrl = "https://us.posthog.com";
+  const cards = [
+    { icon: Eye,       label: "Page Views",       desc: "See which pages users visit most and how long they stay." },
+    { icon: Users,     label: "Unique Visitors",  desc: "Track how many unique people visit your site each day/week/month." },
+    { icon: Globe,     label: "Traffic Sources",  desc: "Find out how visitors are finding you — Google, Instagram, direct, etc." },
+    { icon: TrendingUp,label: "Conversion Funnels",desc: "See how many visitors go from homepage → booking dialog → confirmed booking." },
+  ];
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="font-display text-xl text-[#3A2E5D] mb-1">Analytics</h3>
+        <p className="text-sm text-[#9B8AC4]">Your site is already tracking visitors via PostHog. Open your dashboard to see live data.</p>
+      </div>
+
+      {/* CTA */}
+      <div className="bg-gradient-to-br from-[#3A2E5D] to-[#6B5B95] rounded-2xl p-6 text-white flex flex-col sm:flex-row items-start sm:items-center gap-4">
+        <div className="flex-1">
+          <div className="font-display text-lg font-semibold mb-1">PostHog Analytics Dashboard</div>
+          <p className="text-white/70 text-sm">All your website traffic, visitor sessions, and user behavior is being tracked in real-time.</p>
+        </div>
+        <a href={posthogUrl} target="_blank" rel="noopener noreferrer"
+          className="flex-shrink-0 flex items-center gap-2 bg-[#EBB99A] text-[#3A2E5D] font-bold text-sm px-5 py-2.5 rounded-xl hover:bg-[#D9956A] transition">
+          <TrendingUp size={14}/> Open Dashboard
+        </a>
+      </div>
+
+      {/* What you can track */}
+      <div className="grid sm:grid-cols-2 gap-4">
+        {cards.map(({ icon: Icon, label, desc }) => (
+          <div key={label} className="bg-white border border-[#C8B6E2] rounded-2xl p-5 flex gap-4 items-start">
+            <div className="w-9 h-9 rounded-xl bg-[#E6DDF1] flex items-center justify-center flex-shrink-0">
+              <Icon size={16} className="text-[#6B5B95]"/>
+            </div>
+            <div>
+              <div className="font-semibold text-[#3A2E5D] text-sm">{label}</div>
+              <div className="text-xs text-[#9B8AC4] mt-0.5 leading-relaxed">{desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Login tip */}
+      <div className="bg-[#FBF4E8] border border-[#C8B6E2] rounded-2xl p-5 text-sm text-[#3A2E5D]">
+        <p className="font-semibold mb-1">How to log in to PostHog:</p>
+        <ol className="list-decimal list-inside space-y-1 text-[#6B5B95] text-xs">
+          <li>Go to <span className="font-mono">us.posthog.com</span></li>
+          <li>Sign in with the account you used when setting up the site</li>
+          <li>Your project is named after your site — click it to see live data</li>
+        </ol>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // MAIN DASHBOARD
 // ════════════════════════════════════════════════════════════════════════════
 const TABS = [
@@ -1903,6 +1963,7 @@ const TABS = [
   { id:"schedule",   label:"Schedule",   icon:CalendarDays },
   { id:"svccat",     label:"Svc Cats",   icon:BookOpen     },
   { id:"services",   label:"Services",   icon:Sparkles     },
+  { id:"analytics",  label:"Analytics",  icon:TrendingUp   },
 ];
 
 export default function AdminDashboard() {
@@ -1993,6 +2054,7 @@ export default function AdminDashboard() {
               {activeTab === "schedule"   && <ScheduleTab            toast={showToast} />}
               {activeTab === "svccat"     && <ServiceCategoriesTab   toast={showToast} />}
               {activeTab === "services"   && <ServicesTab            toast={showToast} />}
+              {activeTab === "analytics"  && <AnalyticsTab />}
             </div>
           </div>
         </main>
