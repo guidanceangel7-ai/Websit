@@ -321,7 +321,7 @@ export default function BookingDialog({
         </div>
 
         {/* ── Scrollable content area ──────────────────────────────── */}
-        <div className="px-4 sm:px-8 py-5 sm:py-7 max-h-[55vh] sm:max-h-[60vh] overflow-y-auto overscroll-contain bg-[#FFFFFF]">
+        <div className="px-4 sm:px-8 py-4 sm:py-7 max-h-[calc(100dvh-220px)] sm:max-h-[60vh] overflow-y-auto overscroll-contain bg-[#FFFFFF]">
 
           {/* STEP: category */}
           {cur === "category" && (
@@ -413,12 +413,34 @@ export default function BookingDialog({
 
           {/* STEP: schedule */}
           {cur === "schedule" && (
-            <div data-testid="step-schedule" className="grid sm:grid-cols-2 gap-5 sm:gap-6">
+            <div data-testid="step-schedule" className="space-y-4">
+              {/* Date picker — full calendar on desktop, compact strip on mobile */}
               <div>
                 <Label className="text-xs uppercase tracking-[0.22em] text-peach-deep font-semibold">
                   ✦ Pick a date
                 </Label>
-                <div className="mt-2 sm:mt-3 rounded-2xl border-2 border-peach/40 bg-[#FBF4E8] p-1 sm:p-2">
+
+                {/* Mobile: native date input (compact, no height issues) */}
+                <div className="mt-2 sm:hidden">
+                  <input
+                    type="date"
+                    data-testid="booking-date-mobile"
+                    min={format(new Date(), "yyyy-MM-dd")}
+                    value={date ? format(date, "yyyy-MM-dd") : ""}
+                    onChange={(e) => {
+                      if (!e.target.value) return;
+                      const d = new Date(e.target.value + "T00:00:00");
+                      if (!disablePast(d)) { setDate(d); setSlot(null); }
+                    }}
+                    className="w-full rounded-xl border-2 border-[#EBB99A]/50 bg-[#FBF4E8] px-4 py-3 text-[#3A2E5D] text-base focus:outline-none focus:border-[#6B5B95]"
+                  />
+                  <p className="text-xs text-ink-plum/60 mt-1.5 italic">
+                    Sundays and blocked dates cannot be selected. Slots: 10 AM – 8 PM IST.
+                  </p>
+                </div>
+
+                {/* Desktop: full calendar */}
+                <div className="mt-2 hidden sm:block rounded-2xl border-2 border-peach/40 bg-[#FBF4E8] p-2">
                   <Calendar
                     mode="single"
                     selected={date}
@@ -428,17 +450,21 @@ export default function BookingDialog({
                     data-testid="booking-calendar"
                   />
                 </div>
-                <p className="text-xs text-ink-plum/70 mt-2 italic">
-                  Sundays are reserved for rest. Slots: 10 AM – 8 PM IST.
-                </p>
+                {date && (
+                  <p className="hidden sm:block text-xs text-ink-plum/70 mt-1.5 italic">
+                    Sundays are reserved for rest. Slots: 10 AM – 8 PM IST.
+                  </p>
+                )}
               </div>
+
+              {/* Time slots */}
               <div>
                 <Label className="text-xs uppercase tracking-[0.22em] text-peach-deep font-semibold">
                   ✦ Available time slots
                 </Label>
-                <div className="mt-2 sm:mt-3 grid grid-cols-2 gap-2 max-h-[240px] sm:max-h-[300px] overflow-y-auto pr-1">
+                <div className="mt-2 grid grid-cols-2 gap-2 max-h-[180px] sm:max-h-[260px] overflow-y-auto pr-1">
                   {!date && (
-                    <div className="col-span-2 text-sm text-ink-plum/60 bg-peach/10 rounded-xl p-4 text-center italic">
+                    <div className="col-span-2 text-sm text-ink-plum/60 bg-peach/10 rounded-xl p-3 text-center italic">
                       Pick a date to see available slots ✦
                     </div>
                   )}
@@ -448,7 +474,7 @@ export default function BookingDialog({
                     </div>
                   )}
                   {date && !loadingSlots && slots.length === 0 && (
-                    <div className="col-span-2 text-sm text-ink-plum/70 bg-peach/15 rounded-xl p-4 text-center">
+                    <div className="col-span-2 text-sm text-ink-plum/70 bg-peach/15 rounded-xl p-3 text-center">
                       No slots available – please pick another date.
                     </div>
                   )}
