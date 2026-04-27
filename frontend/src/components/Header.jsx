@@ -6,24 +6,31 @@ import LoginModal from "./LoginModal";
 import UserProfile from "./UserProfile";
 
 const NAV = [
-  { label: "About", href: "#about" },
-  { label: "Services", href: "#services" },
-  { label: "Shop", href: "#shop" },
-  { label: "Reviews", href: "#testimonials" },
-  { label: "FAQ", href: "#faq" },
-  { label: "Contact", href: "#contact" },
+  { label: "About",    id: "about"        },
+  { label: "Services", id: "services"     },
+  { label: "Shop",     id: "shop"         },
+  { label: "Reviews",  id: "testimonials" },
+  { label: "FAQ",      id: "faq"          },
+  { label: "Contact",  id: "contact"      },
 ];
 
-/* ── helper: check if user is logged in ────────────────────────────── */
+/** Smooth-scroll to a section by id — works inside React Router BrowserRouter */
+function scrollTo(id) {
+  const el = document.getElementById(id);
+  if (el) {
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+}
+
 function isLoggedIn() {
   return !!localStorage.getItem("ga_token");
 }
 
 export default function Header({ onBookNow }) {
-  const [scrolled, setScrolled] = useState(false);
+  const [scrolled, setScrolled]     = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [loggedIn, setLoggedIn] = useState(isLoggedIn);
-  const [loginOpen, setLoginOpen] = useState(false);
+  const [loggedIn, setLoggedIn]     = useState(isLoggedIn);
+  const [loginOpen, setLoginOpen]   = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
@@ -33,21 +40,14 @@ export default function Header({ onBookNow }) {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
-  // re-sync login state when localStorage changes (cross-tab or after logout)
   useEffect(() => {
     const sync = () => setLoggedIn(isLoggedIn());
     window.addEventListener("storage", sync);
     return () => window.removeEventListener("storage", sync);
   }, []);
 
-  const handleLoggedIn = () => {
-    setLoggedIn(true);
-    setLoginOpen(false);
-  };
-
-  const handleLogout = () => {
-    setLoggedIn(false);
-  };
+  const handleLoggedIn = () => { setLoggedIn(true); setLoginOpen(false); };
+  const handleLogout   = () => { setLoggedIn(false); };
 
   return (
     <>
@@ -61,9 +61,9 @@ export default function Header({ onBookNow }) {
         }`}
       >
         <div className="max-w-7xl mx-auto px-5 sm:px-8 h-[72px] flex items-center justify-between">
-          {/* logo */}
-          <a
-            href="#top"
+          {/* logo — scrolls to top */}
+          <button
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
             className="flex items-center gap-3 group"
             data-testid="header-logo"
           >
@@ -81,25 +81,24 @@ export default function Header({ onBookNow }) {
                 Tarot · Numerology · Akashic
               </span>
             </div>
-          </a>
+          </button>
 
           {/* desktop nav */}
           <nav className="hidden lg:flex items-center gap-8">
             {NAV.map((item) => (
-              <a
+              <button
                 key={item.label}
-                href={item.href}
+                onClick={() => scrollTo(item.id)}
                 data-testid={`nav-link-${item.label.toLowerCase()}`}
                 className="text-sm text-ink-plum/80 hover:text-lavender-deep transition relative after:content-[''] after:absolute after:left-0 after:-bottom-1 after:w-0 hover:after:w-full after:h-px after:bg-peach after:transition-all"
               >
                 {item.label}
-              </a>
+              </button>
             ))}
           </nav>
 
-          {/* right side actions */}
+          {/* right side */}
           <div className="flex items-center gap-2">
-            {/* Book a Reading — desktop */}
             <button
               data-testid="header-book-now"
               onClick={onBookNow}
@@ -108,12 +107,8 @@ export default function Header({ onBookNow }) {
               Book a Reading
             </button>
 
-            {/* Login / Profile button */}
             <button
-              onClick={() => {
-                if (loggedIn) setProfileOpen(true);
-                else setLoginOpen(true);
-              }}
+              onClick={() => { if (loggedIn) setProfileOpen(true); else setLoginOpen(true); }}
               title={loggedIn ? "My Account" : "Sign In"}
               aria-label={loggedIn ? "My Account" : "Sign In"}
               className={`inline-flex items-center justify-center w-10 h-10 rounded-full border transition ${
@@ -125,7 +120,6 @@ export default function Header({ onBookNow }) {
               {loggedIn ? <User size={16} /> : <LogIn size={16} />}
             </button>
 
-            {/* Mobile hamburger */}
             <button
               data-testid="mobile-menu-toggle"
               onClick={() => setMobileOpen((o) => !o)}
@@ -149,46 +143,29 @@ export default function Header({ onBookNow }) {
             >
               <div className="px-6 py-6 flex flex-col gap-4">
                 {NAV.map((item) => (
-                  <a
+                  <button
                     key={item.label}
-                    href={item.href}
                     data-testid={`mobile-nav-${item.label.toLowerCase()}`}
-                    onClick={() => setMobileOpen(false)}
-                    className="font-display text-2xl text-ink-plum"
+                    onClick={() => { setMobileOpen(false); scrollTo(item.id); }}
+                    className="font-display text-2xl text-ink-plum text-left"
                   >
                     {item.label}
-                  </a>
+                  </button>
                 ))}
 
                 <button
                   data-testid="mobile-book-now"
-                  onClick={() => {
-                    setMobileOpen(false);
-                    onBookNow?.();
-                  }}
+                  onClick={() => { setMobileOpen(false); onBookNow?.(); }}
                   className="mt-2 inline-flex justify-center items-center bg-lavender-deep text-ivory rounded-full px-5 py-3 text-sm font-medium"
                 >
                   Book a Reading
                 </button>
 
-                {/* mobile login / profile */}
                 <button
-                  onClick={() => {
-                    setMobileOpen(false);
-                    if (loggedIn) setProfileOpen(true);
-                    else setLoginOpen(true);
-                  }}
+                  onClick={() => { setMobileOpen(false); if (loggedIn) setProfileOpen(true); else setLoginOpen(true); }}
                   className="inline-flex items-center gap-2 justify-center border border-lavender-deep/40 text-lavender-deep rounded-full px-5 py-3 text-sm font-medium hover:bg-lavender/10 transition"
                 >
-                  {loggedIn ? (
-                    <>
-                      <User size={15} /> My Account
-                    </>
-                  ) : (
-                    <>
-                      <LogIn size={15} /> Sign In
-                    </>
-                  )}
+                  {loggedIn ? <><User size={15} /> My Account</> : <><LogIn size={15} /> Sign In</>}
                 </button>
               </div>
             </motion.div>
@@ -196,17 +173,8 @@ export default function Header({ onBookNow }) {
         </AnimatePresence>
       </header>
 
-      {/* ── modals rendered outside header so z-index is clean ─── */}
-      <LoginModal
-        open={loginOpen}
-        onClose={() => setLoginOpen(false)}
-        onLoggedIn={handleLoggedIn}
-      />
-      <UserProfile
-        open={profileOpen}
-        onClose={() => setProfileOpen(false)}
-        onLogout={handleLogout}
-      />
+      <LoginModal open={loginOpen} onClose={() => setLoginOpen(false)} onLoggedIn={handleLoggedIn} />
+      <UserProfile open={profileOpen} onClose={() => setProfileOpen(false)} onLogout={handleLogout} />
     </>
   );
 }
