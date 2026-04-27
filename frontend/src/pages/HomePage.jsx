@@ -27,6 +27,7 @@ import Footer from "@/components/Footer";
 import FAQ from "@/components/FAQ";
 import Contact from "@/components/Contact";
 import BookingDialog from "@/components/BookingDialog";
+import PromoBanner from "@/components/PromoBanner";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -134,6 +135,7 @@ export default function HomePage({ scrollToShop, openBooking }) {
   return (
     <div className="min-h-screen bg-[#FBF4E8]">
       <Toaster position="top-center" richColors />
+      <PromoBanner />
       <Header onBookNow={() => openBookingDialog()} />
       <main>
         <Hero onBookNow={() => openBookingDialog()} />
