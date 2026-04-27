@@ -1536,6 +1536,7 @@ class ProductCategoryIn(BaseModel):
     accent: Optional[str] = "from-[#C8B6E2] to-[#E6DDF1]"
     icon: Optional[str] = "sparkles"
     order: int = 100
+    image_url: Optional[str] = None  # cover image for category (URL or base64 data URI)
 
 
 class ProductIn(BaseModel):
@@ -1630,9 +1631,9 @@ async def public_list_product_categories():
         await db.product_categories.find({}, {"_id": 0}).to_list(200),
         key=lambda x: x.get("order", 9999)
     )
-    # Exclude raw base64 blobs from the listing to keep response small & fast
+    # Fetch products WITHOUT the heavy images[] array — only keep image_url (primary)
     products = sorted(
-        await db.products.find({}, {"_id": 0}).to_list(500),
+        await db.products.find({}, {"_id": 0, "images": 0}).to_list(500),
         key=lambda x: x.get("order", 9999)
     )
     by_cat: dict = {}
@@ -1685,7 +1686,10 @@ async def admin_delete_product_category(cid: str, _admin: str = Depends(verify_a
 
 @api_router.get("/products")
 async def public_list_products():
-    docs = sorted(await db.products.find({}, {"_id": 0}).to_list(length=200), key=lambda x: x.get("order", 9999))
+    docs = sorted(
+        await db.products.find({}, {"_id": 0, "images": 0}).to_list(length=200),
+        key=lambda x: x.get("order", 9999)
+    )
     return [_strip_base64_images(_normalize_product_images(d)) for d in docs]
 
 
@@ -1744,8 +1748,21 @@ async def public_list_tags():
 
 @api_router.get("/admin/products")
 async def admin_list_products(_admin: str = Depends(verify_admin)):
-    docs = sorted(await db.products.find({}, {"_id": 0}).to_list(length=500), key=lambda x: x.get("order", 9999))
-    return [_normalize_product_images(d) for d in docs]
+    # Exclude raw base64 blobs from listing — images load via /admin/products/{pid}
+    docs = sorted(
+        await db.products.find({}, {"_id": 0, "images": 0}).to_list(length=500),
+        key=lambda x: x.get("order", 9999)
+    )
+    result = []
+    for d in docs:
+        norm = _normalize_product_images(d)
+        # Replace base64 image_url with lightweight API path for the listing
+        url = norm.get("image_url") or ""
+        if url.startswith("data:"):
+            norm["image_url"] = f"/api/products/{d.get('id', '')}/image/0"
+        norm.pop("images", None)
+        result.append(norm)
+    return result
 
 
 @api_router.post("/admin/products")
