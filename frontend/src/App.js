@@ -1,55 +1,39 @@
-/* ── Base ────────────────────────────────────────────────────────────────── */
-*,
-*::before,
-*::after {
-  /* Remove 300ms tap delay on Android/iOS */
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
+import React from "react";
+import "./App.css";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
+import HomePage from "@/pages/HomePage";
+import AdminLogin from "@/pages/AdminLogin";
+import AdminDashboard from "@/pages/AdminDashboard";
+import PaymentSuccess from "@/pages/PaymentSuccess";
 
-html {
-  /* Prevent horizontal overflow on mobile */
-  overflow-x: hidden;
-  /* Use dynamic viewport height — accounts for Android Chrome URL bar */
-  height: 100%;
-}
-
-body {
-  overflow-x: hidden;
-  /* Smooth scrolling on iOS */
-  -webkit-overflow-scrolling: touch;
-}
-
-.App {
-  min-height: 100dvh;
-  background-color: #FBF4E8;
-  overflow-x: hidden;
-}
-
-/* ── Custom utility classes used throughout the site ────────────────────── */
-
-/* Aurora gradient background for the Hero section */
-.aurora-bg {
-  background: linear-gradient(
-    135deg,
-    #FBF4E8 0%,
-    #F4ECD6 25%,
-    #EDE0F0 50%,
-    #F5EEF8 75%,
-    #FBF4E8 100%
+/**
+ * Deep-link URL structure:
+ *   /                      → homepage
+ *   /shop                  → homepage, scrolls to shop
+ *   /shop/:catId           → homepage, opens category  e.g. /shop/crystals
+ *   /product/:productId    → homepage, opens product modal  e.g. /product/crystal-amethyst
+ *   /book/:serviceId       → homepage, opens booking dialog  e.g. /book/tarot-15min
+ *   /payment-success       → order confirmation page
+ *   /admin/login           → admin login
+ *   /admin                 → admin dashboard
+ */
+function App() {
+  return (
+    <div className="App">
+      <BrowserRouter>
+        <Routes>
+          <Route path="/" element={<HomePage />} />
+          <Route path="/shop" element={<HomePage scrollToShop />} />
+          <Route path="/shop/:catId" element={<HomePage scrollToShop />} />
+          <Route path="/product/:productId" element={<HomePage scrollToShop />} />
+          <Route path="/book/:serviceId" element={<HomePage openBooking />} />
+          <Route path="/payment-success" element={<PaymentSuccess />} />
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route path="/admin" element={<AdminDashboard />} />
+        </Routes>
+      </BrowserRouter>
+    </div>
   );
 }
 
-/* Glassmorphism card */
-.glass-card {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border: 1px solid rgba(235, 185, 154, 0.25);
-  box-shadow: 0 4px 24px rgba(107, 91, 149, 0.1);
-}
-
-/* Scrollbar styling */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #C8B6E2; border-radius: 3px; }
+export default App;
