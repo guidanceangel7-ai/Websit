@@ -20,6 +20,7 @@ import Hero from "@/components/Hero";
 import HeroMarquee from "@/components/HeroMarquee";
 import About from "@/components/About";
 import Gallery from "@/components/Gallery";
+import SocialFeed from "@/components/SocialFeed";
 import HowItWorks from "@/components/HowItWorks";
 import Shop from "@/components/Shop";
 import Footer from "@/components/Footer";
@@ -139,6 +140,7 @@ export default function HomePage({ scrollToShop, openBooking }) {
         <HeroMarquee />
         <About />
         <Gallery />
+        <SocialFeed />
         <HowItWorks />
 
         {/* Shop receives deep-link initial state from URL params */}
