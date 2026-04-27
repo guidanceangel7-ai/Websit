@@ -1,107 +1,108 @@
-import React, { useEffect, useState } from "react";
-import axios from "axios";
-import Header from "../components/Header";
-import Hero from "../components/Hero";
-import HeroMarquee from "../components/HeroMarquee";
-import PressStrip from "../components/PressStrip";
-import About from "../components/About";
-import Gallery from "../components/Gallery";
-import WhyJenika from "../components/WhyJenika";
-import HowItWorks from "../components/HowItWorks";
-import Services from "../components/Services";
-import Shop from "../components/Shop";
-import Testimonials from "../components/Testimonials";
-import InstagramGrid from "../components/InstagramGrid";
-import YouTubeGrid from "../components/YouTubeGrid"; // ✅ ADDED
-import FAQ from "../components/FAQ";
-import Contact from "../components/Contact";
-import Footer from "../components/Footer";
-import BookingDialog from "../components/BookingDialog";
-import SpecialOfferBanner from "../components/SpecialOfferBanner";
-import { Toaster } from "../components/ui/sonner";
+/**
+ * HomePage.jsx — Guidance Angel main page
+ * Handles deep links for shop categories, product modals, and booking dialog.
+ *
+ * URL params used:
+ *   /shop/:catId        → auto-opens that shop category
+ *   /product/:productId → auto-opens that product's detail popup
+ *   /book/:serviceId    → auto-opens booking dialog pre-selected to that service
+ */
+import React, { useEffect, useRef, useState } from "react";
+import { useParams } from "react-router-dom";
+import { Toaster } from "sonner";
+import Header from "@/components/Header";
+import Hero from "@/components/Hero";
+import HeroMarquee from "@/components/HeroMarquee";
+import About from "@/components/About";
+import Gallery from "@/components/Gallery";
+import HowItWorks from "@/components/HowItWorks";
+import Shop from "@/components/Shop";
+import Footer from "@/components/Footer";
+import FAQ from "@/components/FAQ";
+import Contact from "@/components/Contact";
+import BookingDialog from "@/components/BookingDialog";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-export default function HomePage() {
-  const [categories, setCategories] = useState([]);
-  const [services, setServices] = useState([]);
-  const [testimonials, setTestimonials] = useState([]);
-  const [bookingOpen, setBookingOpen] = useState(false);
+async function apiFetch(path) {
+  const res = await fetch(`${API}${path}`);
+  if (!res.ok) return [];
+  return res.json().catch(() => []);
+}
+
+export default function HomePage({ scrollToShop, openBooking }) {
+  const { catId, productId, serviceId } = useParams();
+
+  const [bookingOpen, setBookingOpen]     = useState(false);
+  const [categories, setCategories]       = useState([]);
+  const [services, setServices]           = useState([]);
   const [initialService, setInitialService] = useState(null);
-  const [initialCategoryId, setInitialCategoryId] = useState(null);
 
+  const shopRef = useRef(null);
+
+  // Load booking categories + services
   useEffect(() => {
-    let alive = true;
-    (async () => {
-      try {
-        const [c, t] = await Promise.all([
-          axios.get(`${API}/categories`),
-          axios.get(`${API}/testimonials`),
-        ]);
-        if (!alive) return;
-        const cats = c.data || [];
-        setCategories(cats);
-
-        const flat = cats.flatMap((cat) => cat.services || []);
-        setServices(flat);
-        setTestimonials(t.data || []);
-      } catch (e) {
-        console.error(e);
-      }
-    })();
-    return () => {
-      alive = false;
-    };
+    apiFetch("/categories").then((r) => setCategories(Array.isArray(r) ? r : []));
+    apiFetch("/services").then((r) => setServices(Array.isArray(r) ? r : []));
   }, []);
 
-  const openBooking = (service = null, categoryId = null) => {
-    setInitialService(service);
-    setInitialCategoryId(categoryId || (service ? service.category : null));
-    setBookingOpen(true);
-  };
+  // When services are loaded and we have a serviceId from the URL → auto-open booking
+  useEffect(() => {
+    if (!serviceId || !services.length) return;
+    const svc = services.find((s) => s.id === serviceId);
+    if (svc) {
+      setInitialService(svc);
+      setBookingOpen(true);
+    }
+  }, [services, serviceId]);
+
+  // For /book without serviceId
+  useEffect(() => {
+    if (openBooking && !serviceId) setBookingOpen(true);
+  }, [openBooking, serviceId]);
+
+  // Scroll to shop section when the route is /shop or /shop/:catId or /product/:productId
+  useEffect(() => {
+    if (!scrollToShop) return;
+    const el = shopRef.current || document.getElementById("shop");
+    if (!el) return;
+    // Small delay so the page renders first
+    const t = setTimeout(() => el.scrollIntoView({ behavior: "smooth", block: "start" }), 350);
+    return () => clearTimeout(t);
+  }, [scrollToShop]);
 
   return (
-    <div className="min-h-screen bg-ivory text-ink-plum font-body">
-      <SpecialOfferBanner />
-      <Header onBookNow={() => openBooking(null, null)} />
-
-      <main style={{ paddingTop: "var(--banner-h, 0px)" }}>
-        <Hero onBookNow={() => openBooking(null, null)} />
+    <div className="min-h-screen bg-[#FBF4E8]">
+      <Toaster position="top-center" richColors />
+      <Header onBookNow={() => setBookingOpen(true)} />
+      <main>
+        <Hero onBookNow={() => setBookingOpen(true)} />
         <HeroMarquee />
-        <PressStrip />
         <About />
         <Gallery />
-        <WhyJenika />
-        <HowItWorks onBookNow={() => openBooking(null, null)} />
-
-        <Services
-          categories={categories}
-          onSelect={(s) => openBooking(s)}
-        />
-
-        <Shop />
-        <Testimonials items={testimonials} />
-
-        {/* ✅ SOCIAL SECTION */}
-        <InstagramGrid />
-        <YouTubeGrid /> {/* ⭐ THIS WAS MISSING */}
-
+        <HowItWorks />
+        {/* Shop — receives deep-link initial state from URL params */}
+        <div ref={shopRef}>
+          <Shop
+            initialCategoryId={catId || null}
+            initialProductId={productId || null}
+          />
+        </div>
         <FAQ />
-        <Contact onBookNow={() => openBooking(null, null)} />
+        <Contact onBookNow={() => setBookingOpen(true)} />
       </main>
-
       <Footer />
 
       <BookingDialog
         open={bookingOpen}
-        onOpenChange={setBookingOpen}
-        initialService={initialService}
-        initialCategoryId={initialCategoryId}
+        onOpenChange={(v) => {
+          setBookingOpen(v);
+          if (!v) setInitialService(null);
+        }}
         categories={categories}
         services={services}
+        initialService={initialService}
       />
-
-      <Toaster richColors position="top-center" />
     </div>
   );
 }
