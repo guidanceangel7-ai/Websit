@@ -60,7 +60,7 @@ export default function Header({ onBookNow }) {
             : "bg-transparent"
         }`}
       >
-        <div className="max-w-7xl mx-auto px-5 sm:px-8 h-[72px] flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-[72px] flex items-center justify-between gap-3">
           {/* logo — scrolls to top */}
           <button
             onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
@@ -70,7 +70,7 @@ export default function Header({ onBookNow }) {
             <img
               src={BRAND.logoRound}
               alt="Guidance Angel"
-              className="w-11 h-11 rounded-full object-cover ring-1 ring-peach/40 group-hover:ring-peach transition"
+              className="w-10 h-10 sm:w-11 sm:h-11 rounded-full object-cover ring-1 ring-peach/40 group-hover:ring-peach transition flex-shrink-0"
             />
             <div className="hidden sm:flex flex-col leading-tight">
               <span className="font-display text-lg italic text-lavender-deep">
@@ -98,7 +98,7 @@ export default function Header({ onBookNow }) {
           </nav>
 
           {/* right side */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <button
               data-testid="header-book-now"
               onClick={onBookNow}
@@ -141,7 +141,7 @@ export default function Header({ onBookNow }) {
               transition={{ duration: 0.3 }}
               className="lg:hidden overflow-hidden bg-ivory/95 backdrop-blur-xl border-b border-peach/30"
             >
-              <div className="px-6 py-6 flex flex-col gap-4">
+              <div className="px-5 py-5 flex flex-col gap-4 max-h-[calc(100dvh-64px-var(--banner-h,0px))] overflow-y-auto">
                 {NAV.map((item) => (
                   <button
                     key={item.label}
