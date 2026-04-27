@@ -33,7 +33,7 @@ const STEPS = [
 export default function HowItWorks() {
   return (
     <section
-      id="services"
+      id="how-it-works"
       data-testid="how-it-works-section"
       className="relative py-20 sm:py-28 bg-gradient-to-b from-ivory to-ivory-deep/30"
     >
