@@ -832,6 +832,9 @@ function ProductsTab({ toast }) {
     if (!editForm) return;
     setEditSaving(true);
     try {
+      // IMPORTANT: must include editImages in PUT payload — otherwise the server
+      // receives images:[] (ProductIn default) and wipes all uploaded images from DB.
+      const cleanImages = editImages.filter((u) => u && (u.startsWith("data:") || u.startsWith("http")));
       await adminFetch(`/admin/products/${editProduct.id}`, {
         method: "PUT",
         body: JSON.stringify({
@@ -839,6 +842,8 @@ function ProductsTab({ toast }) {
           price_inr: parseInt(editForm.price_inr, 10) || 0,
           order: parseInt(editForm.order, 10) || 100,
           tags: editForm.tags.split(",").map((t) => t.trim()).filter(Boolean),
+          images: cleanImages,
+          image_url: cleanImages[0] || null,
         }),
       });
       toast("Product saved"); load(); closeEdit();
