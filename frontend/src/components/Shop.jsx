@@ -806,6 +806,124 @@ function FloatingCart({ count, onClick }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// CATEGORY VIEW — products grid with tag filter chips
+// ════════════════════════════════════════════════════════════════════════════
+function CategoryView({ cat, cartCount, onBack, onOpenCart, addToCart, cartQtyFor, onOpenDetail }) {
+  const products = cat.products || [];
+
+  // Collect all unique tags in this category
+  const categoryTags = useMemo(() => {
+    const seen = new Set();
+    const tags = [];
+    products.forEach((p) => {
+      (p.tags || []).forEach((t) => {
+        if (!seen.has(t)) { seen.add(t); tags.push(t); }
+      });
+    });
+    return tags;
+  }, [products]);
+
+  const [activeTagFilter, setActiveTagFilter] = useState(null);
+
+  const visibleProducts = useMemo(() => {
+    if (!activeTagFilter) return products;
+    return products.filter((p) => (p.tags || []).includes(activeTagFilter));
+  }, [products, activeTagFilter]);
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-8">
+        <button onClick={onBack} className="flex items-center gap-2 text-[#6B5B95] font-semibold text-sm hover:gap-3 transition-all duration-200">
+          <ArrowLeft size={16} /> Back to Shop
+        </button>
+        {cartCount > 0 && (
+          <button onClick={onOpenCart}
+            className="flex items-center gap-2 bg-[#6B5B95] text-[#FBF4E8] rounded-full px-4 py-2 text-sm font-semibold hover:bg-[#5a4a84] transition shadow-md">
+            <ShoppingCart size={14} /> Bag ({cartCount})
+          </button>
+        )}
+      </div>
+
+      {/* Category hero banner */}
+      <div className={`rounded-3xl overflow-hidden mb-8 bg-gradient-to-br ${grad(cat.id)} relative`}>
+        {cat.image_url && (
+          <img src={cat.image_url} alt={cat.name} className="absolute inset-0 w-full h-full object-cover opacity-30" />
+        )}
+        <div className="relative p-8 sm:p-12 text-white">
+          <Overline className="text-white/70">{cat.name}</Overline>
+          <h2 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">{cat.name}</h2>
+          {cat.description && (
+            <p className="mt-3 text-white/75 max-w-xl text-base leading-relaxed">{cat.description}</p>
+          )}
+          <p className="mt-4 text-white/60 text-sm">{products.length} products available</p>
+        </div>
+      </div>
+
+      {/* Tag filter chips */}
+      {categoryTags.length > 1 && (
+        <div className="mb-6">
+          <p className="text-[11px] uppercase tracking-[0.25em] text-[#9B8AC4] font-semibold mb-2 flex items-center gap-1.5">
+            <Tag size={11} /> Filter by intention
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveTagFilter(null)}
+              className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${
+                !activeTagFilter
+                  ? "bg-[#6B5B95] text-[#FBF4E8]"
+                  : "border border-[#C8B6E2] bg-white/70 text-[#6B5B95] hover:bg-[#F0EBF9]"
+              }`}
+            >
+              All ({products.length})
+            </button>
+            {categoryTags.map((t) => {
+              const count = products.filter((p) => (p.tags || []).includes(t)).length;
+              return (
+                <button
+                  key={t}
+                  onClick={() => setActiveTagFilter(activeTagFilter === t ? null : t)}
+                  className={`px-4 py-1.5 rounded-full text-xs font-semibold transition-all duration-200 ${
+                    activeTagFilter === t
+                      ? "bg-[#6B5B95] text-[#FBF4E8]"
+                      : "border border-[#C8B6E2] bg-white/70 text-[#6B5B95] hover:bg-[#F0EBF9]"
+                  }`}
+                >
+                  #{t} ({count})
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {products.length === 0 ? (
+        <div className="text-center py-20 text-[#9B8AC4]">
+          <Sparkles size={40} className="mx-auto mb-4 opacity-40" />
+          <p className="font-display text-xl text-[#3A2E5D]">No products in this category yet</p>
+          <button onClick={onBack} className="mt-5 px-5 py-2 rounded-full bg-[#6B5B95] text-[#FBF4E8] text-sm font-semibold hover:bg-[#5a4a84] transition">
+            ← Browse other categories
+          </button>
+        </div>
+      ) : visibleProducts.length === 0 ? (
+        <div className="text-center py-16 text-[#9B8AC4]">
+          <Tag size={36} className="mx-auto mb-3 opacity-40" />
+          <p className="text-sm">No products match this filter</p>
+          <button onClick={() => setActiveTagFilter(null)} className="mt-4 px-4 py-1.5 rounded-full bg-[#6B5B95] text-[#FBF4E8] text-xs font-semibold hover:bg-[#5a4a84] transition">
+            Show all
+          </button>
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+          {visibleProducts.map((product) => (
+            <ProductCard key={product.id} product={product} onAdd={addToCart} cartQty={cartQtyFor(product.id)} onOpenDetail={onOpenDetail} />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // MAIN SHOP COMPONENT
 // ════════════════════════════════════════════════════════════════════════════
 export default function Shop() {
@@ -968,48 +1086,15 @@ export default function Shop() {
 
         {/* CATEGORY VIEW */}
         {view === "category" && selectedCategory && (
-          <>
-            <div className="flex items-center justify-between mb-8">
-              <button onClick={goHome} className="flex items-center gap-2 text-[#6B5B95] font-semibold text-sm hover:gap-3 transition-all duration-200">
-                <ArrowLeft size={16} /> Back to Shop
-              </button>
-              {cartCount > 0 && (
-                <button onClick={() => setCartOpen(true)}
-                  className="flex items-center gap-2 bg-[#6B5B95] text-[#FBF4E8] rounded-full px-4 py-2 text-sm font-semibold hover:bg-[#5a4a84] transition shadow-md">
-                  <ShoppingCart size={14} /> Bag ({cartCount})
-                </button>
-              )}
-            </div>
-
-            <div className={`rounded-3xl overflow-hidden mb-10 bg-gradient-to-br ${grad(selectedCategory.id)}`}>
-              <div className="p-8 sm:p-12 text-white">
-                <Overline className="text-white/70">{selectedCategory.name}</Overline>
-                <h2 className="font-display text-3xl sm:text-4xl mt-3 leading-tight">{selectedCategory.name}</h2>
-                {selectedCategory.description && (
-                  <p className="mt-3 text-white/75 max-w-xl text-base leading-relaxed">{selectedCategory.description}</p>
-                )}
-                <p className="mt-4 text-white/60 text-sm">
-                  {(selectedCategory.products || []).length} products available
-                </p>
-              </div>
-            </div>
-
-            {(selectedCategory.products || []).length === 0 ? (
-              <div className="text-center py-20 text-[#9B8AC4]">
-                <Sparkles size={40} className="mx-auto mb-4 opacity-40" />
-                <p className="font-display text-xl text-[#3A2E5D]">No products in this category yet</p>
-                <button onClick={goHome} className="mt-5 px-5 py-2 rounded-full bg-[#6B5B95] text-[#FBF4E8] text-sm font-semibold hover:bg-[#5a4a84] transition">
-                  ← Browse other categories
-                </button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
-                {(selectedCategory.products || []).map((product) => (
-                  <ProductCard key={product.id} product={product} onAdd={addToCart} cartQty={cartQtyFor(product.id)} onOpenDetail={setDetailProductId} />
-                ))}
-              </div>
-            )}
-          </>
+          <CategoryView
+            cat={selectedCategory}
+            cartCount={cartCount}
+            onBack={goHome}
+            onOpenCart={() => setCartOpen(true)}
+            addToCart={addToCart}
+            cartQtyFor={cartQtyFor}
+            onOpenDetail={setDetailProductId}
+          />
         )}
 
         {/* TAG VIEW */}
