@@ -11,6 +11,8 @@ from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict, EmailStr
 from typing import List, Optional, Dict
 import uuid
+import random
+import string
 from datetime import datetime, timezone, date as date_type, timedelta
 import hmac
 import hashlib
@@ -44,6 +46,7 @@ if not USE_MOCK_PAYMENT:
 ADMIN_USERNAME = os.environ.get('ADMIN_USERNAME', 'jenika')
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'guidance@2026')
 JWT_SECRET = os.environ.get('JWT_SECRET', 'change-me')
+USER_JWT_SECRET = os.environ.get('USER_JWT_SECRET', JWT_SECRET + '_user')
 
 # Razorpay redirect / webhook config
 # FRONTEND_URL: absolute origin used to redirect users back from the backend
@@ -501,6 +504,11 @@ async def seed_db():
     await db.orders.create_index("created_at")
     await db.promotions.create_index("starts_at")
     await db.blocked_dates.create_index("date")
+    # ── User auth indexes ──────────────────────────────────────────────────
+    await db.users.create_index("email", unique=True)
+    await db.otps.create_index("email")
+    # TTL index: MongoDB auto-deletes OTP docs 900 seconds after expires_at
+    await db.otps.create_index("expires_at", expireAfterSeconds=0)
     logger.info(
         f"DB seeded {SEED_VERSION}. ProductCats: {await db.product_categories.count_documents({})}, "
         f"Products: {await db.products.count_documents({})}"
@@ -1630,7 +1638,7 @@ async def public_list_product_categories():
     by_cat: dict = {}
     for p in products:
         cat_id = p.get("product_category_id")
-        by_cat.setdefault(cat_id, []).append(_strip_base64_images(p))
+        by_cat.setdefault(cat_id, []).append(_strip_base64_images(_normalize_product_images(p)))
     for c in cats:
         c["products"] = by_cat.get(c.get("id"), [])
     return cats
@@ -2266,6 +2274,201 @@ async def admin_update_promotion(pid: str, payload: PromotionIn, _admin: str = D
 async def admin_delete_promotion(pid: str, _admin: str = Depends(verify_admin)):
     res = await db.promotions.delete_one({"id": pid})
     return {"success": True, "removed": res.deleted_count}
+
+
+# ============== User Auth (OTP login) ==============
+
+class SendOTPRequest(BaseModel):
+    email: EmailStr
+
+class VerifyOTPRequest(BaseModel):
+    email: EmailStr
+    otp: str
+
+class RescheduleRequest(BaseModel):
+    new_date: str   # YYYY-MM-DD
+    new_slot: str   # e.g. "10:00 AM"
+
+
+def make_user_token(email: str) -> str:
+    payload = {
+        "sub": email,
+        "role": "user",
+        "iat": datetime.now(timezone.utc),
+        "exp": datetime.now(timezone.utc) + timedelta(days=30),
+    }
+    return jwt.encode(payload, USER_JWT_SECRET, algorithm="HS256")
+
+
+async def verify_user_token(authorization: str = Header(default="")):
+    """FastAPI dependency — validates user JWT and returns email."""
+    token = authorization.removeprefix("Bearer ").strip()
+    if not token:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    try:
+        payload = jwt.decode(token, USER_JWT_SECRET, algorithms=["HS256"])
+        if payload.get("role") != "user":
+            raise ValueError("wrong role")
+        return payload["sub"]   # email
+    except Exception:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+
+@api_router.post("/auth/send-otp")
+async def send_otp(body: SendOTPRequest):
+    """Generate a 6-digit OTP, store it (TTL 10 min), email it to the user."""
+    email = body.email.lower().strip()
+    otp_code = "".join(random.choices(string.digits, k=6))
+    expires_at = datetime.now(timezone.utc) + timedelta(minutes=10)
+    # upsert: replace any previous OTP for this email
+    await db.otps.update_one(
+        {"email": email},
+        {"$set": {"otp": otp_code, "expires_at": expires_at, "attempts": 0}},
+        upsert=True,
+    )
+    # Send via the existing email service
+    try:
+        from email_service import send_email   # type: ignore
+        await send_email(
+            to_email=email,
+            subject="Your Guidance Angel login code",
+            html_body=(
+                f"<p>Hi there,</p>"
+                f"<p>Your one-time login code is:</p>"
+                f"<h2 style='letter-spacing:8px;color:#6B5B95'>{otp_code}</h2>"
+                f"<p>This code expires in 10 minutes. Do not share it with anyone.</p>"
+                f"<p>— Guidance Angel</p>"
+            ),
+        )
+    except Exception as e:
+        logging.warning(f"OTP email failed for {email}: {e}")
+        # In dev/test, log the OTP so you can still test
+        logging.info(f"[DEV OTP] {email}: {otp_code}")
+    return {"success": True, "message": "OTP sent"}
+
+
+@api_router.post("/auth/verify-otp")
+async def verify_otp(body: VerifyOTPRequest):
+    """Verify the OTP, auto-create user if first login, return JWT."""
+    email = body.email.lower().strip()
+    rec = await db.otps.find_one({"email": email})
+    if not rec:
+        raise HTTPException(status_code=400, detail="OTP not found or expired. Please request a new one.")
+    # Check expiry (belt-and-suspenders, TTL index handles cleanup)
+    if rec.get("expires_at") and datetime.now(timezone.utc) > rec["expires_at"].replace(tzinfo=timezone.utc):
+        raise HTTPException(status_code=400, detail="OTP expired. Please request a new one.")
+    # Limit brute-force attempts
+    attempts = rec.get("attempts", 0)
+    if attempts >= 5:
+        raise HTTPException(status_code=429, detail="Too many incorrect attempts. Please request a new OTP.")
+    if rec["otp"] != body.otp.strip():
+        await db.otps.update_one({"email": email}, {"$inc": {"attempts": 1}})
+        raise HTTPException(status_code=400, detail="Incorrect OTP. Please try again.")
+    # OTP valid — delete it
+    await db.otps.delete_one({"email": email})
+    # Auto-create user if they don't exist yet
+    existing = await db.users.find_one({"email": email}, {"_id": 0})
+    if not existing:
+        # Try to seed name/phone from an existing booking
+        booking = await db.bookings.find_one(
+            {"customer_email": email},
+            sort=[("created_at", -1)],
+        )
+        new_user = {
+            "email": email,
+            "name": booking.get("customer_name", "") if booking else "",
+            "phone": booking.get("customer_phone", "") if booking else "",
+            "created_at": datetime.now(timezone.utc),
+        }
+        await db.users.insert_one(new_user)
+        existing = new_user
+    token = make_user_token(email)
+    return {
+        "token": token,
+        "email": email,
+        "name": existing.get("name", ""),
+        "phone": existing.get("phone", ""),
+    }
+
+
+@api_router.get("/me")
+async def get_me(email: str = Depends(verify_user_token)):
+    """Return logged-in user's profile."""
+    user = await db.users.find_one({"email": email}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@api_router.get("/me/bookings")
+async def get_my_bookings(email: str = Depends(verify_user_token)):
+    """Return the user's bookings, most recent first."""
+    cursor = db.bookings.find(
+        {"customer_email": email},
+        {"_id": 0},
+    ).sort("created_at", -1)
+    bookings = await cursor.to_list(length=100)
+    return bookings
+
+
+@api_router.get("/me/orders")
+async def get_my_orders(email: str = Depends(verify_user_token)):
+    """Return the user's shop orders, most recent first."""
+    cursor = db.orders.find(
+        {"customer_email": email},
+        {"_id": 0},
+    ).sort("created_at", -1)
+    orders = await cursor.to_list(length=100)
+    return orders
+
+
+@api_router.post("/me/bookings/{booking_id}/reschedule")
+async def reschedule_booking(
+    booking_id: str,
+    body: RescheduleRequest,
+    email: str = Depends(verify_user_token),
+):
+    """
+    Reschedule a booking — only allowed if the session is more than 3 hours away.
+    """
+    booking = await db.bookings.find_one({"id": booking_id, "customer_email": email})
+    if not booking:
+        raise HTTPException(status_code=404, detail="Booking not found")
+    # Parse the current session datetime to enforce the 3-hour rule
+    try:
+        slot_str = booking.get("booking_slot", "")
+        date_str = booking.get("booking_date", "")
+        time_part, meridiem = slot_str.split(" ")
+        h, m = map(int, time_part.split(":"))
+        if meridiem == "PM" and h != 12:
+            h += 12
+        if meridiem == "AM" and h == 12:
+            h = 0
+        year, month, day = map(int, date_str.split("-"))
+        session_dt = datetime(year, month, day, h, m, tzinfo=timezone.utc)
+        hours_left = (session_dt - datetime.now(timezone.utc)).total_seconds() / 3600
+        if hours_left < 3:
+            raise HTTPException(
+                status_code=400,
+                detail="Reschedule not allowed within 3 hours of the session.",
+            )
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not parse existing session time.")
+    # Apply reschedule
+    await db.bookings.update_one(
+        {"id": booking_id},
+        {
+            "$set": {
+                "booking_date": body.new_date,
+                "booking_slot": body.new_slot,
+                "status": "rescheduled",
+                "rescheduled_at": datetime.now(timezone.utc),
+            }
+        },
+    )
+    return {"success": True, "new_date": body.new_date, "new_slot": body.new_slot}
 
 
 # ============== Wire-up ==============
