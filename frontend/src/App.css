@@ -1,4 +1,83 @@
-.App {
-  min-height: 100vh;
-  background-color: #FBF4E8;
+/* ── Base ────────────────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
+  /* Remove 300ms tap delay on Android/iOS */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
 }
+
+html {
+  /* Prevent horizontal overflow on mobile */
+  overflow-x: hidden;
+  /* Use dynamic viewport height — accounts for Android Chrome URL bar */
+  height: 100%;
+  /* Offset anchor scroll so sections don't hide under fixed header (72px header + ~20px buffer) */
+  scroll-padding-top: 92px;
+  scroll-behavior: smooth;
+}
+
+body {
+  overflow-x: hidden;
+  /* Smooth scrolling on iOS */
+  -webkit-overflow-scrolling: touch;
+}
+
+.App {
+  min-height: 100dvh;
+  background-color: #FBF4E8;
+  overflow-x: hidden;
+}
+
+/* ── Mobile responsiveness helpers ─────────────────────────────────────── */
+
+/* All images scale correctly on small screens */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Prevent text from overflowing on very small screens */
+h1, h2, h3, h4, h5, h6, p {
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+}
+
+/* Fix iOS momentum scroll in overflow containers */
+.overflow-y-auto,
+.overflow-x-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Ensure fixed elements don't overlap content on very small phones */
+@media (max-width: 380px) {
+  html { scroll-padding-top: 80px; }
+}
+
+/* ── Custom utility classes used throughout the site ────────────────────── */
+
+/* Aurora gradient background for the Hero section */
+.aurora-bg {
+  background: linear-gradient(
+    135deg,
+    #FBF4E8 0%,
+    #F4ECD6 25%,
+    #EDE0F0 50%,
+    #F5EEF8 75%,
+    #FBF4E8 100%
+  );
+}
+
+/* Glassmorphism card */
+.glass-card {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(235, 185, 154, 0.25);
+  box-shadow: 0 4px 24px rgba(107, 91, 149, 0.1);
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #C8B6E2; border-radius: 3px; }
