@@ -951,6 +951,9 @@ export default function Shop({ initialCategoryId, initialProductId }) {
   // Track if we've already applied the initial URL state (only once per mount)
   const initialApplied = useRef(false);
 
+  // Keep a ref to categories so the popstate handler always sees the latest value
+  const categoriesRef = useRef([]);
+
   const { show: showToast, el: toastEl } = useToast();
 
   useEffect(() => {
@@ -961,10 +964,46 @@ export default function Shop({ initialCategoryId, initialProductId }) {
       fetch(`${API}/tags`).then((r) => r.json()).catch(() => []),
     ]).then(([cats, tags]) => {
       if (!alive) return;
-      setCategories(Array.isArray(cats) ? cats : []);
+      const safeCats = Array.isArray(cats) ? cats : [];
+      setCategories(safeCats);
+      categoriesRef.current = safeCats;
       setAllTags(Array.isArray(tags) ? tags : []);
     }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
+  }, []);
+
+  // ── Popstate: sync shop state when browser back/forward is pressed ──────────
+  // This handles: back from product modal → category, back from category → home,
+  // and back from booking dialog → wherever the shop was.
+  useEffect(() => {
+    function handlePop() {
+      const path   = window.location.pathname;
+      const search = window.location.search;
+
+      if (path === "/" || path === "/shop" || path === "") {
+        setView("home");
+        setSelectedCategory(null);
+        setActiveTag(null);
+        setDetailProductId(null);
+      } else if (path.startsWith("/product/")) {
+        // Re-open product modal if navigating forward to a product URL
+        const pid = path.replace("/product/", "");
+        setDetailProductId(pid);
+      } else if (path.startsWith("/shop/")) {
+        const cid = path.replace("/shop/", "");
+        const cat = categoriesRef.current.find((c) => c.id === cid);
+        if (cat) {
+          setSelectedCategory(cat);
+          setView("category");
+          setDetailProductId(null);
+        }
+      } else if (path === "/shop" && search.includes("tag=")) {
+        const tag = new URLSearchParams(search).get("tag");
+        if (tag) { setActiveTag(tag); setView("tag"); setDetailProductId(null); }
+      }
+    }
+    window.addEventListener("popstate", handlePop);
+    return () => window.removeEventListener("popstate", handlePop);
   }, []);
 
   // Apply deep-link initial state once categories are loaded
