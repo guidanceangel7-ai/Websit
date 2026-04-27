@@ -20,6 +20,7 @@ import Hero        from "@/components/Hero";
 import HeroMarquee from "@/components/HeroMarquee";
 import About       from "@/components/About";
 import Gallery     from "@/components/Gallery";
+import WhyJenika   from "@/components/WhyJenika";
 import Services    from "@/components/Services";
 import HowItWorks  from "@/components/HowItWorks";
 import Shop        from "@/components/Shop";
@@ -138,8 +139,11 @@ export default function HomePage({ scrollToShop, openBooking }) {
         <About />
         <Gallery />
 
-        {/* Services — the bookable offerings (id="services" for nav) */}
-        <Services onBookNow={openBookingDialog} />
+        {/* Why Jenika — 6 reasons / feature cards */}
+        <WhyJenika />
+
+        {/* Services — bookable offerings with real category data (id="services" for nav) */}
+        <Services categories={categories} onBookNow={openBookingDialog} />
 
         {/* How it works — the booking process steps */}
         <HowItWorks />
