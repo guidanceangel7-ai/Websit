@@ -17,14 +17,10 @@ if (config.enableHealthCheck) {
 }
 
 let webpackConfig = {
+  // ESLint disabled: eslint 9.x is installed but CRACO 7 only supports eslint 8.
+  // Run eslint separately in dev: `npx eslint src --ext .js,.jsx`
   eslint: {
-    configure: {
-      extends: ["plugin:react-hooks/recommended"],
-      rules: {
-        "react-hooks/rules-of-hooks": "error",
-        "react-hooks/exhaustive-deps": "warn",
-      },
-    },
+    enable: false,
   },
   webpack: {
     alias: {
