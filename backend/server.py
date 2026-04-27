@@ -1,4 +1,6 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Header, Request
+from instagram_router import router as instagram_router
+from youtube_router import router as youtube_router
 from fastapi.responses import RedirectResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -2499,6 +2501,8 @@ async def reschedule_booking(
 
 # ============== Wire-up ==============
 app.include_router(api_router)
+app.include_router(instagram_router, prefix="/api")
+app.include_router(youtube_router,   prefix="/api")
 
 app.add_middleware(
     CORSMiddleware,
