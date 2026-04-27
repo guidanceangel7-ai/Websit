@@ -9,7 +9,8 @@ export default function Hero({ onBookNow }) {
     <section
       id="top"
       data-testid="hero-section"
-      className="relative min-h-[100vh] pt-28 pb-20 sm:pt-32 sm:pb-28 aurora-bg overflow-hidden"
+      className="relative pt-28 pb-20 sm:pt-32 sm:pb-28 aurora-bg overflow-hidden"
+      style={{ minHeight: "100dvh" }}
     >
       <SparkleField count={14} />
 
