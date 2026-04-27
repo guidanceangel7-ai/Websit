@@ -10,7 +10,7 @@ import {
   BarChart2, BookOpen, Package, Tag, LogOut, RefreshCw, Loader2,
   X, Plus, Trash2, Download, Sparkles, ShoppingBag, Check,
   Layers, ChevronDown, ChevronUp, ImagePlus, FolderOpen, Edit2,
-  ZoomIn, ZoomOut, Move, Crop, RotateCcw,
+  ZoomIn, ZoomOut, Move, Crop, RotateCcw, CalendarDays, CalendarX,
 } from "lucide-react";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
@@ -1106,15 +1106,220 @@ function PromotionsTab({ toast }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
+// SCHEDULE TAB — manage blocked dates & working hours
+// ════════════════════════════════════════════════════════════════════════════
+const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+function ScheduleTab({ toast }) {
+  const today      = new Date();
+  const [year, setYear]   = useState(today.getFullYear());
+  const [month, setMonth] = useState(today.getMonth()); // 0-indexed
+  const [blocked, setBlocked]   = useState([]); // ["YYYY-MM-DD", ...]
+  const [loading, setLoading]   = useState(true);
+  const [toggling, setToggling] = useState(null); // date string being toggled
+
+  // Working hours state
+  const [hours, setHours] = useState({ start: "10:00", end: "20:00", slot_duration: 60 });
+  const [savingHours, setSavingHours] = useState(false);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    adminFetch("/blocked-dates")
+      .then((r) => setBlocked(Array.isArray(r) ? r : []))
+      .catch((e) => toast(e.message, "error"))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Build calendar grid for current month
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const firstDay    = new Date(year, month, 1).getDay(); // 0=Sun
+
+  const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
+  const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
+
+  const fmt = (d) => {
+    const mm = String(month + 1).padStart(2, "0");
+    const dd = String(d).padStart(2, "0");
+    return `${year}-${mm}-${dd}`;
+  };
+
+  const isPast    = (d) => new Date(year, month, d) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const isSunday  = (d) => new Date(year, month, d).getDay() === 0;
+  const isBlocked = (d) => blocked.includes(fmt(d));
+  const isToday   = (d) => fmt(d) === today.toISOString().slice(0, 10);
+
+  const toggleDate = async (d) => {
+    if (isPast(d) || isSunday(d)) return;
+    const dateStr = fmt(d);
+    setToggling(dateStr);
+    try {
+      if (isBlocked(d)) {
+        await adminFetch(`/admin/blocked-dates/${dateStr}`, { method: "DELETE" });
+        setBlocked((prev) => prev.filter((x) => x !== dateStr));
+        toast("Date unblocked — clients can now book this day");
+      } else {
+        await adminFetch("/admin/blocked-dates", { method: "POST", body: JSON.stringify({ date: dateStr }) });
+        setBlocked((prev) => [...prev, dateStr]);
+        toast("Date blocked — clients cannot book this day");
+      }
+    } catch (e) { toast(e.message, "error"); }
+    finally { setToggling(null); }
+  };
+
+  const saveHours = async () => {
+    setSavingHours(true);
+    try {
+      await adminFetch("/admin/working-hours", {
+        method: "POST",
+        body: JSON.stringify(hours),
+      });
+      toast("Working hours saved");
+    } catch {
+      // endpoint may not exist yet — show a friendly note
+      toast("Hours noted (API endpoint not yet configured)", "error");
+    } finally { setSavingHours(false); }
+  };
+
+  return (
+    <div className="space-y-8">
+      <div>
+        <h3 className="font-display text-xl text-[#3A2E5D] mb-1">Schedule & Availability</h3>
+        <p className="text-sm text-[#9B8AC4]">Click any date to block/unblock it. Sundays are always closed. Blocked dates are shown in red.</p>
+      </div>
+
+      {/* Calendar */}
+      <div className="bg-white rounded-2xl border border-[#C8B6E2] overflow-hidden">
+        {/* Month nav */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E6DDF1] bg-[#F5EEF8]">
+          <button onClick={prevMonth} className="p-2 rounded-xl hover:bg-[#E6DDF1] text-[#6B5B95] transition">◀</button>
+          <span className="font-display text-lg text-[#3A2E5D]">{MONTHS[month]} {year}</span>
+          <button onClick={nextMonth} className="p-2 rounded-xl hover:bg-[#E6DDF1] text-[#6B5B95] transition">▶</button>
+        </div>
+
+        {/* Day headers */}
+        <div className="grid grid-cols-7 border-b border-[#E6DDF1]">
+          {DAYS.map((d) => (
+            <div key={d} className={`py-2 text-center text-[11px] font-bold uppercase tracking-wider ${d === "Sun" ? "text-red-400" : "text-[#9B8AC4]"}`}>{d}</div>
+          ))}
+        </div>
+
+        {/* Day cells */}
+        {loading ? (
+          <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[#6B5B95]"/></div>
+        ) : (
+          <div className="grid grid-cols-7">
+            {/* Empty cells before first day */}
+            {Array.from({ length: firstDay }).map((_, i) => (
+              <div key={`e${i}`} className="h-12 border-b border-r border-[#F0EBF9]" />
+            ))}
+            {/* Day cells */}
+            {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
+              const dateStr  = fmt(d);
+              const past     = isPast(d);
+              const sun      = isSunday(d);
+              const block    = isBlocked(d);
+              const spinning = toggling === dateStr;
+              const todayDay = isToday(d);
+
+              let cellCls = "h-12 border-b border-r border-[#F0EBF9] flex items-center justify-center relative transition";
+              let numCls  = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium";
+
+              if (sun)         { cellCls += " bg-gray-50";       numCls += " text-red-300 cursor-not-allowed"; }
+              else if (past)   { cellCls += " bg-gray-50/50";    numCls += " text-[#C8B6E2] cursor-not-allowed"; }
+              else if (block)  { cellCls += " bg-red-50 cursor-pointer hover:bg-red-100"; numCls += " bg-red-400 text-white"; }
+              else             { cellCls += " cursor-pointer hover:bg-[#F5EEF8]"; numCls += " text-[#3A2E5D] hover:bg-[#E6DDF1]"; }
+
+              if (todayDay && !block) numCls += " ring-2 ring-[#6B5B95]";
+
+              return (
+                <div key={d} className={cellCls} onClick={() => toggleDate(d)} title={block ? "Click to unblock" : sun ? "Always closed" : past ? "Past date" : "Click to block"}>
+                  <span className={numCls}>
+                    {spinning ? <Loader2 size={13} className="animate-spin" /> : d}
+                  </span>
+                  {block && !spinning && (
+                    <CalendarX size={10} className="absolute top-1 right-1 text-red-400" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Legend */}
+        <div className="flex flex-wrap gap-4 px-5 py-3 bg-[#F5EEF8] border-t border-[#E6DDF1] text-[11px] text-[#9B8AC4]">
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-400 inline-block"/>{blocked.length} blocked date{blocked.length !== 1 ? "s" : ""}</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full ring-2 ring-[#6B5B95] inline-block"/>Today</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-gray-200 inline-block"/>Closed (Sunday / past)</span>
+        </div>
+      </div>
+
+      {/* Blocked dates list */}
+      {blocked.length > 0 && (
+        <div className="bg-white rounded-2xl border border-[#C8B6E2] p-5">
+          <h4 className="text-sm font-semibold text-[#3A2E5D] mb-3 flex items-center gap-2"><CalendarX size={14} className="text-red-400"/> All Blocked Dates</h4>
+          <div className="flex flex-wrap gap-2">
+            {[...blocked].sort().map((d) => (
+              <span key={d} className="inline-flex items-center gap-1.5 bg-red-50 text-red-600 text-xs font-medium px-3 py-1.5 rounded-full border border-red-200">
+                {d}
+                <button onClick={async () => {
+                  setToggling(d);
+                  try {
+                    await adminFetch(`/admin/blocked-dates/${d}`, { method: "DELETE" });
+                    setBlocked((prev) => prev.filter((x) => x !== d));
+                    toast("Date unblocked");
+                  } catch (e) { toast(e.message, "error"); }
+                  finally { setToggling(null); }
+                }} className="hover:text-red-800 ml-0.5">
+                  <X size={11}/>
+                </button>
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Working hours */}
+      <div className="bg-white rounded-2xl border border-[#C8B6E2] p-5">
+        <h4 className="text-sm font-semibold text-[#3A2E5D] mb-4 flex items-center gap-2"><CalendarDays size={14} className="text-[#6B5B95]"/> Working Hours</h4>
+        <div className="grid sm:grid-cols-3 gap-4">
+          <div>
+            <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Start time</label>
+            <input type="time" value={hours.start} onChange={(e) => setHours((h) => ({ ...h, start: e.target.value }))} className={inputCls} />
+          </div>
+          <div>
+            <label className="text-xs text-[#9B8AC4] font-medium block mb-1">End time</label>
+            <input type="time" value={hours.end} onChange={(e) => setHours((h) => ({ ...h, end: e.target.value }))} className={inputCls} />
+          </div>
+          <div>
+            <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Slot duration (mins)</label>
+            <select value={hours.slot_duration} onChange={(e) => setHours((h) => ({ ...h, slot_duration: Number(e.target.value) }))} className={inputCls}>
+              {[30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{m} min</option>)}
+            </select>
+          </div>
+        </div>
+        <p className="text-[11px] text-[#9B8AC4] mt-3">Mon–Sat only. Sundays and blocked dates are always unavailable to clients.</p>
+        <button onClick={saveHours} disabled={savingHours} className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-[#6B5B95] text-white text-sm font-medium hover:bg-[#5a4a84] disabled:opacity-60 transition">
+          {savingHours ? <Loader2 size={13} className="animate-spin"/> : <Check size={13}/>} Save Hours
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 // MAIN DASHBOARD
 // ════════════════════════════════════════════════════════════════════════════
 const TABS = [
-  { id:"stats",      label:"Overview",   icon:BarChart2  },
-  { id:"bookings",   label:"Bookings",   icon:BookOpen   },
-  { id:"orders",     label:"Orders",     icon:ShoppingBag},
-  { id:"categories", label:"Categories", icon:FolderOpen },
-  { id:"products",   label:"Products",   icon:Package    },
-  { id:"promotions", label:"Promos",     icon:Tag        },
+  { id:"stats",      label:"Overview",   icon:BarChart2    },
+  { id:"bookings",   label:"Bookings",   icon:BookOpen     },
+  { id:"orders",     label:"Orders",     icon:ShoppingBag  },
+  { id:"categories", label:"Categories", icon:FolderOpen   },
+  { id:"products",   label:"Products",   icon:Package      },
+  { id:"promotions", label:"Promos",     icon:Tag          },
+  { id:"schedule",   label:"Schedule",   icon:CalendarDays },
 ];
 
 export default function AdminDashboard() {
@@ -1133,53 +1338,78 @@ export default function AdminDashboard() {
   const logout = () => { localStorage.removeItem("admin_token"); navigate("/admin/login"); };
 
   return (
-    <div className="min-h-screen bg-[#F5EEF8]">
+    <div className="min-h-screen bg-[#F5EEF8] overflow-x-hidden">
       {toastEl}
-      <div className="flex">
-        <aside className="hidden lg:flex flex-col w-64 min-h-screen bg-[#3A2E5D] text-white fixed left-0 top-0 z-30">
-          <div className="px-6 py-8 border-b border-white/10">
-            <div className="text-[10px] uppercase tracking-[0.3em] text-yellow-200/70">Admin Panel</div>
-            <div className="font-display text-xl italic mt-1">guidance angel</div>
+      <div className="flex min-h-screen">
+
+        {/* ── Desktop sidebar ─────────────────────────────────────────────── */}
+        <aside className="hidden lg:flex flex-col w-64 min-h-screen bg-[#3A2E5D] text-white fixed left-0 top-0 z-30 shrink-0">
+          {/* Brand */}
+          <div className="px-6 py-7 border-b border-white/10">
+            <div className="text-[10px] uppercase tracking-[0.3em] text-yellow-200/60 mb-1">Admin Panel</div>
+            <div className="font-display text-2xl italic text-white leading-tight">guidance angel</div>
+            <div className="mt-1 text-[10px] text-yellow-200/50 tracking-widest">✦ SACRED SHOP</div>
           </div>
-          <nav className="flex-1 px-4 py-6 space-y-1">
-            {TABS.map((tab)=>(
-              <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
-                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition ${activeTab===tab.id?"bg-[#6B5B95] text-white shadow-md":"text-white/70 hover:bg-white/10"}`}>
-                <tab.icon size={15}/> {tab.label}
+          {/* Nav */}
+          <nav className="flex-1 px-3 py-5 space-y-0.5 overflow-y-auto">
+            {TABS.map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition ${
+                  activeTab === tab.id
+                    ? "bg-[#6B5B95] text-white shadow-md"
+                    : "text-white/70 hover:bg-white/10 hover:text-white"
+                }`}>
+                <tab.icon size={15} /> {tab.label}
               </button>
             ))}
           </nav>
-          <div className="px-4 py-5 border-t border-white/10">
-            <a href="/" className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white/70 hover:bg-white/10 transition">
-              <Sparkles size={14}/> View Site
+          {/* Bottom actions */}
+          <div className="px-3 py-4 border-t border-white/10 space-y-0.5">
+            <a href="/" className="flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-white/70 hover:bg-white/10 hover:text-white transition">
+              <Sparkles size={14} /> View Site
             </a>
-            <button onClick={logout} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white/70 hover:bg-red-500/20 hover:text-red-300 transition">
-              <LogOut size={14}/> Sign Out
+            <button onClick={logout} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm text-white/70 hover:bg-red-500/20 hover:text-red-300 transition">
+              <LogOut size={14} /> Sign Out
             </button>
           </div>
         </aside>
 
-        <div className="lg:hidden fixed top-0 inset-x-0 z-30 bg-[#3A2E5D] text-white px-4 py-3 flex items-center justify-between">
-          <span className="font-display text-lg italic">guidance angel <span className="text-[10px] tracking-widest text-yellow-200/70 not-italic">admin</span></span>
-          <button onClick={logout} className="p-2 rounded-xl bg-white/10 hover:bg-white/20"><LogOut size={15}/></button>
+        {/* ── Mobile topbar ────────────────────────────────────────────────── */}
+        <div className="lg:hidden fixed top-0 inset-x-0 z-30 bg-[#3A2E5D] text-white px-4 py-3 flex items-center justify-between shadow-lg">
+          <div className="font-display text-lg italic">guidance angel <span className="text-[10px] tracking-widest text-yellow-200/60 not-italic ml-1">admin</span></div>
+          <button onClick={logout} className="p-2 rounded-xl bg-white/10 hover:bg-white/20 transition"><LogOut size={15} /></button>
         </div>
 
-        <main className="flex-1 lg:ml-64 p-6 lg:p-10 pt-16 lg:pt-10">
-          <div className="lg:hidden flex gap-2 overflow-x-auto pb-4 mb-6">
-            {TABS.map((tab)=>(
-              <button key={tab.id} onClick={()=>setActiveTab(tab.id)}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap transition ${activeTab===tab.id?"bg-[#6B5B95] text-white":"bg-white border border-[#C8B6E2] text-[#3A2E5D]"}`}>
-                <tab.icon size={12}/> {tab.label}
-              </button>
-            ))}
-          </div>
+        {/* ── Main content ─────────────────────────────────────────────────── */}
+        {/* min-w-0 prevents flex child from growing beyond its container */}
+        <main className="flex-1 min-w-0 lg:ml-64 pt-16 lg:pt-0">
+          <div className="p-4 sm:p-6 lg:p-10 max-w-full">
 
-          {activeTab==="stats"      && <StatsTab      toast={showToast}/>}
-          {activeTab==="bookings"   && <BookingsTab   toast={showToast}/>}
-          {activeTab==="orders"     && <OrdersTab     toast={showToast}/>}
-          {activeTab==="categories" && <CategoriesTab toast={showToast}/>}
-          {activeTab==="products"   && <ProductsTab   toast={showToast}/>}
-          {activeTab==="promotions" && <PromotionsTab toast={showToast}/>}
+            {/* Mobile tab pills (horizontal scroll) */}
+            <div className="lg:hidden flex gap-2 overflow-x-auto pb-3 mb-5 -mx-1 px-1">
+              {TABS.map((tab) => (
+                <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap flex-shrink-0 transition ${
+                    activeTab === tab.id
+                      ? "bg-[#6B5B95] text-white shadow-sm"
+                      : "bg-white border border-[#C8B6E2] text-[#3A2E5D]"
+                  }`}>
+                  <tab.icon size={12} /> {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Tab content — each tab is responsible for its own overflow-x-auto on tables */}
+            <div className="min-w-0">
+              {activeTab === "stats"      && <StatsTab      toast={showToast} />}
+              {activeTab === "bookings"   && <BookingsTab   toast={showToast} />}
+              {activeTab === "orders"     && <OrdersTab     toast={showToast} />}
+              {activeTab === "categories" && <CategoriesTab toast={showToast} />}
+              {activeTab === "products"   && <ProductsTab   toast={showToast} />}
+              {activeTab === "promotions" && <PromotionsTab toast={showToast} />}
+              {activeTab === "schedule"   && <ScheduleTab   toast={showToast} />}
+            </div>
+          </div>
         </main>
       </div>
     </div>
