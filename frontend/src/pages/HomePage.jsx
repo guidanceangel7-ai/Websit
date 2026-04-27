@@ -140,7 +140,6 @@ export default function HomePage({ scrollToShop, openBooking }) {
         <HeroMarquee />
         <About />
         <Gallery />
-        <SocialFeed />
         <HowItWorks />
 
         {/* Shop receives deep-link initial state from URL params */}
@@ -153,6 +152,7 @@ export default function HomePage({ scrollToShop, openBooking }) {
         </div>
 
         <FAQ />
+        <SocialFeed />
         <Contact onBookNow={() => openBookingDialog()} />
       </main>
       <Footer />
