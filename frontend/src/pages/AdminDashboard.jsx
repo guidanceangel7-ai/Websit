@@ -1,1016 +1,1017 @@
-import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
+/**
+ * AdminDashboard.jsx — Guidance Angel Admin Panel
+ * Uses ONLY: React, framer-motion, lucide-react (all pre-installed)
+ * No axios, no sonner — pure fetch API + inline Toast
+ */
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { format } from "date-fns";
-import { BRAND } from "../lib/brand";
 import {
-  LogOut,
-  RefreshCw,
-  Phone,
-  Mail,
-  MessageCircle,
-  Plus,
-  X,
-  CalendarOff,
-  CalendarIcon,
-  Filter,
-  Check,
-  ChevronDown,
-  Download,
-  Trash2,
-  UserPlus,
+  BarChart2, BookOpen, Package, Tag, LogOut, RefreshCw, Loader2,
+  X, Plus, Trash2, Download, Sparkles, ShoppingBag, Check,
+  Layers, ChevronDown, ChevronUp, ImagePlus, FolderOpen, Edit2,
 } from "lucide-react";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../components/ui/table";
-import { Badge } from "../components/ui/badge";
-import { Toaster } from "../components/ui/sonner";
-import { toast } from "sonner";
-import { Calendar } from "../components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "../components/ui/popover";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../components/ui/dropdown-menu";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
-import SettingsPanel from "../components/admin/SettingsPanel";
-import ServicesPanel from "../components/admin/ServicesPanel";
-import CategoriesPanel from "../components/admin/CategoriesPanel";
-import ProductsPanel from "../components/admin/ProductsPanel";
-import OrdersPanel from "../components/admin/OrdersPanel";
-import PromotionsPanel from "../components/admin/PromotionsPanel";
-import TestimonialsPanel from "../components/admin/TestimonialsPanel";
-import ProductCategoriesPanel from "../components/admin/ProductCategoriesPanel";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
-const PAY_COLOR = (s) =>
-  ({
-    paid: "bg-lavender-deep text-ivory",
-    pending: "bg-peach/30 text-ink-plum",
+// ── Auth helper ──────────────────────────────────────────────────────────────
+function token() { return localStorage.getItem("admin_token") || ""; }
+function authH() { return { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" }; }
+
+async function adminFetch(path, opts = {}) {
+  const res = await fetch(`${API}${path}`, {
+    headers: authH(),
+    ...opts,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.detail || "Request failed");
+  return data;
+}
+
+// ── Inline Toast ─────────────────────────────────────────────────────────────
+function useToast() {
+  const [toasts, setToasts] = useState([]);
+  const show = useCallback((msg, type = "success") => {
+    const id = Date.now();
+    setToasts((p) => [...p, { id, msg, type }]);
+    setTimeout(() => setToasts((p) => p.filter((t) => t.id !== id)), 3500);
+  }, []);
+
+  const el = (
+    <div className="fixed top-5 right-5 z-[200] flex flex-col gap-2 pointer-events-none">
+      {toasts.map((t) => (
+        <div
+          key={t.id}
+          className={`px-4 py-2.5 rounded-xl shadow-lg text-sm font-semibold flex items-center gap-2 transition-all ${
+            t.type === "error" ? "bg-red-600 text-white" : "bg-[#3A2E5D] text-[#FBF4E8]"
+          }`}
+        >
+          {t.type === "error" ? <X size={13} /> : <Check size={13} />}
+          {t.msg}
+        </div>
+      ))}
+    </div>
+  );
+  return { show, el };
+}
+
+// ── UI helpers ───────────────────────────────────────────────────────────────
+function StatCard({ label, value, sub, color = "#6B5B95" }) {
+  return (
+    <div className="rounded-2xl bg-white/80 border border-[#C8B6E2] p-5 shadow-sm">
+      <p className="text-[11px] uppercase tracking-widest text-[#9B8AC4] font-semibold">{label}</p>
+      <p className="mt-1 font-display text-3xl" style={{ color }}>{value}</p>
+      {sub && <p className="mt-1 text-xs text-[#3A2E5D]/60">{sub}</p>}
+    </div>
+  );
+}
+
+function StatusBadge({ value }) {
+  const map = {
+    paid: "bg-green-100 text-green-700",
+    pending: "bg-amber-100 text-amber-700",
     failed: "bg-red-100 text-red-700",
-  })[s] || "bg-ivory-deep text-ink-plum";
+    confirmed: "bg-blue-100 text-blue-700",
+    completed: "bg-purple-100 text-purple-700",
+    cancelled: "bg-gray-100 text-gray-500",
+    shipped: "bg-cyan-100 text-cyan-700",
+    delivered: "bg-teal-100 text-teal-700",
+  };
+  return (
+    <span className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${map[value] || "bg-gray-100 text-gray-600"}`}>
+      {value}
+    </span>
+  );
+}
 
-const STATUS_COLOR = (s) =>
-  ({
-    confirmed: "bg-lavender-deep/90 text-ivory",
-    completed: "bg-emerald-100 text-emerald-800",
-    cancelled: "bg-red-100 text-red-700",
-    no_show: "bg-orange-100 text-orange-700",
-    pending: "bg-peach/30 text-ink-plum",
-  })[s] || "bg-ivory-deep text-ink-plum";
+const inputCls = "w-full rounded-xl border border-[#C8B6E2] bg-white/80 px-3 py-2 text-sm text-[#3A2E5D] focus:outline-none focus:ring-2 focus:ring-[#6B5B95]";
 
-const STATUS_OPTIONS = [
-  { value: "pending", label: "Pending" },
-  { value: "confirmed", label: "Confirmed" },
-  { value: "completed", label: "Completed" },
-  { value: "cancelled", label: "Cancelled" },
-  { value: "no_show", label: "No-show" },
+// ── Image file → base64 ──────────────────────────────────────────────────────
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// STATS TAB
+// ────────────────────────────────────────────────────────────────────────────
+function StatsTab({ toast }) {
+  const [stats, setStats] = useState(null);
+  const [period, setPeriod] = useState("all");
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback((p) => {
+    setLoading(true);
+    adminFetch(`/admin/stats?period=${p}`)
+      .then(setStats)
+      .catch((e) => toast(e.message, "error"))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => { load(period); }, [load, period]);
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-display text-xl text-[#3A2E5D]">Dashboard Overview</h3>
+        <div className="flex gap-1">
+          {["week", "month", "year", "all"].map((p) => (
+            <button key={p} onClick={() => { setPeriod(p); load(p); }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${period === p ? "bg-[#6B5B95] text-ivory" : "bg-white border border-[#C8B6E2] text-[#3A2E5D] hover:bg-[#E6DDF1]"}`}>
+              {p.charAt(0).toUpperCase() + p.slice(1)}
+            </button>
+          ))}
+        </div>
+      </div>
+      {loading ? (
+        <div className="flex justify-center py-20"><Loader2 size={28} className="animate-spin text-[#6B5B95]" /></div>
+      ) : stats ? (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Combined Revenue" value={`₹${(stats.combined_revenue_inr || 0).toLocaleString("en-IN")}`} color="#6B5B95" />
+          <StatCard label="Total Bookings" value={stats.bookings?.total || 0} sub={`${stats.bookings?.paid || 0} paid · ${stats.bookings?.pending || 0} pending`} color="#9B8AC4" />
+          <StatCard label="Booking Revenue" value={`₹${(stats.bookings?.revenue_inr || 0).toLocaleString("en-IN")}`} color="#EBB99A" />
+          <StatCard label="Shop Orders" value={stats.orders?.total || 0} sub={`${stats.orders?.paid || 0} paid · ₹${(stats.orders?.revenue_inr || 0).toLocaleString("en-IN")} revenue`} color="#F4C6D6" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// BOOKINGS TAB
+// ────────────────────────────────────────────────────────────────────────────
+function BookingsTab({ toast }) {
+  const [bookings, setBookings] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    adminFetch("/admin/bookings")
+      .then((r) => setBookings(Array.isArray(r) ? r : []))
+      .catch((e) => toast(e.message, "error"))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const updateStatus = async (id, field, value) => {
+    try {
+      await adminFetch(`/admin/bookings/${id}`, { method: "PATCH", body: JSON.stringify({ [field]: value }) });
+      setBookings((prev) => prev.map((b) => b.id === id ? { ...b, [field]: value } : b));
+      toast("Updated");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const deleteBooking = async (id) => {
+    if (!window.confirm("Delete this booking?")) return;
+    try {
+      await adminFetch(`/admin/bookings/${id}`, { method: "DELETE" });
+      setBookings((prev) => prev.filter((b) => b.id !== id));
+      toast("Deleted");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const exportCSV = () => window.open(`${API}/admin/bookings/export?token=${token()}`, "_blank");
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 size={28} className="animate-spin text-[#6B5B95]" /></div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-display text-xl text-[#3A2E5D]">Bookings ({bookings.length})</h3>
+        <div className="flex gap-2">
+          <button onClick={load} className="p-2 rounded-xl bg-[#E6DDF1] text-[#6B5B95] hover:bg-[#C8B6E2] transition"><RefreshCw size={14} /></button>
+          <button onClick={exportCSV} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#6B5B95] text-white text-xs font-medium hover:bg-[#5a4a84] transition">
+            <Download size={13} /> Export
+          </button>
+        </div>
+      </div>
+      <div className="overflow-x-auto rounded-2xl border border-[#C8B6E2]">
+        <table className="w-full text-sm">
+          <thead className="bg-[#E6DDF1]">
+            <tr>
+              {["Name", "Service", "Date/Slot", "Price", "Payment", "Status", "Actions"].map((h) => (
+                <th key={h} className="text-left px-4 py-3 text-[11px] uppercase tracking-wider text-[#6B5B95] font-bold whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {bookings.length === 0 && (
+              <tr><td colSpan={7} className="text-center py-10 text-[#9B8AC4]">No bookings yet</td></tr>
+            )}
+            {bookings.map((b, idx) => (
+              <tr key={b.id} className={`border-t border-[#E6DDF1] ${idx % 2 === 0 ? "bg-white/60" : "bg-white/30"}`}>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="font-medium text-[#3A2E5D]">{b.customer_name}</div>
+                  <div className="text-[11px] text-[#9B8AC4]">{b.customer_email}</div>
+                </td>
+                <td className="px-4 py-3 text-[#3A2E5D] max-w-[160px]"><div className="truncate">{b.service_name}</div></td>
+                <td className="px-4 py-3 whitespace-nowrap text-[#3A2E5D]">
+                  <div>{b.booking_date || "—"}</div>
+                  <div className="text-[11px] text-[#9B8AC4]">{b.booking_slot || ""}</div>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap font-semibold text-[#3A2E5D]">
+                  ₹{(b.final_price_inr || b.service_price_inr || 0).toLocaleString("en-IN")}
+                  {b.discount_inr > 0 && <div className="text-[10px] text-green-600">−₹{b.discount_inr}</div>}
+                </td>
+                <td className="px-4 py-3"><StatusBadge value={b.payment_status} /></td>
+                <td className="px-4 py-3">
+                  <select value={b.booking_status} onChange={(e) => updateStatus(b.id, "booking_status", e.target.value)}
+                    className="text-xs border border-[#C8B6E2] rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[#6B5B95]">
+                    {["pending", "confirmed", "completed", "cancelled"].map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </td>
+                <td className="px-4 py-3">
+                  <button onClick={() => deleteBooking(b.id)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition"><Trash2 size={13} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// ORDERS TAB
+// ────────────────────────────────────────────────────────────────────────────
+function OrdersTab({ toast }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    adminFetch("/admin/orders")
+      .then((r) => setOrders(Array.isArray(r) ? r : []))
+      .catch((e) => toast(e.message, "error"))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const updateStatus = async (id, value) => {
+    try {
+      await adminFetch(`/admin/orders/${id}`, { method: "PATCH", body: JSON.stringify({ order_status: value }) });
+      setOrders((prev) => prev.map((o) => o.id === id ? { ...o, order_status: value } : o));
+      toast("Updated");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const deleteOrder = async (id) => {
+    if (!window.confirm("Delete this order?")) return;
+    try {
+      await adminFetch(`/admin/orders/${id}`, { method: "DELETE" });
+      setOrders((prev) => prev.filter((o) => o.id !== id));
+      toast("Deleted");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 size={28} className="animate-spin text-[#6B5B95]" /></div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-display text-xl text-[#3A2E5D]">Shop Orders ({orders.length})</h3>
+        <button onClick={load} className="p-2 rounded-xl bg-[#E6DDF1] text-[#6B5B95] hover:bg-[#C8B6E2] transition"><RefreshCw size={14} /></button>
+      </div>
+      <div className="overflow-x-auto rounded-2xl border border-[#C8B6E2]">
+        <table className="w-full text-sm">
+          <thead className="bg-[#E6DDF1]">
+            <tr>
+              {["Customer", "Items", "Total", "Payment", "Status", "Actions"].map((h) => (
+                <th key={h} className="text-left px-4 py-3 text-[11px] uppercase tracking-wider text-[#6B5B95] font-bold whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {orders.length === 0 && (
+              <tr><td colSpan={6} className="text-center py-10 text-[#9B8AC4]">No orders yet</td></tr>
+            )}
+            {orders.map((o, idx) => (
+              <tr key={o.id} className={`border-t border-[#E6DDF1] ${idx % 2 === 0 ? "bg-white/60" : "bg-white/30"}`}>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="font-medium text-[#3A2E5D]">{o.customer_name}</div>
+                  <div className="text-[11px] text-[#9B8AC4]">{o.customer_email}</div>
+                  <div className="text-[11px] text-[#9B8AC4]">{o.address?.city}, {o.address?.state}</div>
+                </td>
+                <td className="px-4 py-3 text-[#3A2E5D]">
+                  {(o.items || []).map((item) => (
+                    <div key={item.product_id} className="text-[11px]">{item.product_name} ×{item.quantity}</div>
+                  ))}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap font-semibold text-[#3A2E5D]">
+                  ₹{(o.total_inr || 0).toLocaleString("en-IN")}
+                  {o.discount_inr > 0 && <div className="text-[10px] text-green-600">−₹{o.discount_inr}</div>}
+                </td>
+                <td className="px-4 py-3"><StatusBadge value={o.payment_status} /></td>
+                <td className="px-4 py-3">
+                  <select value={o.order_status} onChange={(e) => updateStatus(o.id, e.target.value)}
+                    className="text-xs border border-[#C8B6E2] rounded-lg px-2 py-1 bg-white focus:outline-none focus:ring-1 focus:ring-[#6B5B95]">
+                    {["pending", "confirmed", "shipped", "delivered", "cancelled"].map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </td>
+                <td className="px-4 py-3">
+                  <button onClick={() => deleteOrder(o.id)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition"><Trash2 size={13} /></button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// CATEGORIES TAB  ← new: manage shop categories with cover image upload
+// ────────────────────────────────────────────────────────────────────────────
+const EMPTY_CAT = { id: "", name: "", description: "", accent: "from-[#C8B6E2] to-[#E6DDF1]", icon: "sparkles", order: "100", image_url: "" };
+
+function CategoriesTab({ toast, onCatsChanged }) {
+  const [cats, setCats] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [formOpen, setFormOpen] = useState(false);
+  const [editCat, setEditCat] = useState(null); // null = add, obj = edit
+  const [form, setForm] = useState(EMPTY_CAT);
+  const [imgPreview, setImgPreview] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [expandedCat, setExpandedCat] = useState(null); // id of cat whose products are shown
+  const fileRef = useRef();
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      adminFetch("/admin/product-categories"),
+      adminFetch("/admin/products"),
+    ]).then(([c, p]) => {
+      setCats(Array.isArray(c) ? c : []);
+      setProducts(Array.isArray(p) ? p : []);
+    }).catch((e) => toast(e.message, "error"))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const handleFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) { toast("Image must be under 4 MB", "error"); return; }
+    const b64 = await fileToBase64(file);
+    setForm((f) => ({ ...f, image_url: b64 }));
+    setImgPreview(b64);
+  };
+
+  const openAdd = () => {
+    setEditCat(null);
+    setForm(EMPTY_CAT);
+    setImgPreview(null);
+    setFormOpen(true);
+  };
+
+  const openEdit = (cat) => {
+    setEditCat(cat);
+    setForm({ ...EMPTY_CAT, ...cat, order: String(cat.order || 100) });
+    setImgPreview(cat.image_url || null);
+    setFormOpen(true);
+  };
+
+  const save = async (e) => {
+    e.preventDefault();
+    if (!form.id.trim() || !form.name.trim()) { toast("ID and name are required", "error"); return; }
+    setSaving(true);
+    try {
+      const payload = { ...form, order: parseInt(form.order, 10) || 100 };
+      if (editCat) {
+        await adminFetch(`/admin/product-categories/${editCat.id}`, { method: "PUT", body: JSON.stringify(payload) });
+        toast("Category updated");
+      } else {
+        await adminFetch("/admin/product-categories", { method: "POST", body: JSON.stringify(payload) });
+        toast("Category created");
+      }
+      setFormOpen(false);
+      load();
+      onCatsChanged?.();
+    } catch (e) { toast(e.message, "error"); }
+    finally { setSaving(false); }
+  };
+
+  const deleteCat = async (id) => {
+    if (!window.confirm("Delete this category? Products will be detached but not deleted.")) return;
+    try {
+      await adminFetch(`/admin/product-categories/${id}`, { method: "DELETE" });
+      toast("Deleted");
+      load();
+      onCatsChanged?.();
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const catProducts = (catId) => products.filter((p) => p.product_category_id === catId);
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 size={28} className="animate-spin text-[#6B5B95]" /></div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-display text-xl text-[#3A2E5D]">Shop Categories ({cats.length})</h3>
+        <div className="flex gap-2">
+          <button onClick={load} className="p-2 rounded-xl bg-[#E6DDF1] text-[#6B5B95] hover:bg-[#C8B6E2] transition"><RefreshCw size={14} /></button>
+          <button onClick={openAdd} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#6B5B95] text-white text-xs font-medium hover:bg-[#5a4a84] transition">
+            <Plus size={13} /> Add Category
+          </button>
+        </div>
+      </div>
+
+      {/* ── Add / Edit Form ── */}
+      {formOpen && (
+        <form onSubmit={save} className="mb-6 p-5 rounded-2xl bg-[#F5EEF8] border border-[#C8B6E2] space-y-3">
+          <p className="font-semibold text-[#3A2E5D] text-sm">{editCat ? "Edit Category" : "New Category"}</p>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <input className={inputCls} placeholder="Category ID (e.g. candles) *" value={form.id} onChange={set("id")} disabled={!!editCat} required />
+            <input className={inputCls} placeholder="Display name *" value={form.name} onChange={set("name")} required />
+            <input className={`${inputCls} sm:col-span-2`} placeholder="Short description (optional)" value={form.description} onChange={set("description")} />
+            <input className={inputCls} type="number" placeholder="Display order (default 100)" value={form.order} onChange={set("order")} />
+            <input className={inputCls} placeholder="External image URL (optional)" value={form.image_url && !form.image_url.startsWith("data:") ? form.image_url : ""} onChange={(e) => { setForm((f) => ({ ...f, image_url: e.target.value })); setImgPreview(null); }} />
+          </div>
+
+          {/* Cover image upload */}
+          <div className="flex items-start gap-4">
+            <div>
+              <p className="text-xs text-[#9B8AC4] mb-1.5 font-medium">Upload cover image (or paste URL above)</p>
+              <button type="button" onClick={() => fileRef.current?.click()}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl border border-dashed border-[#C8B6E2] bg-white text-[#6B5B95] text-xs hover:border-[#6B5B95] transition">
+                <ImagePlus size={14} /> Choose image
+              </button>
+              <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
+            </div>
+            {imgPreview && (
+              <div className="relative">
+                <img src={imgPreview} alt="preview" className="w-20 h-20 rounded-xl object-cover border border-[#C8B6E2]" />
+                <button type="button" onClick={() => { setImgPreview(null); setForm((f) => ({ ...f, image_url: "" })); }}
+                  className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center text-[10px]">
+                  <X size={10} />
+                </button>
+              </div>
+            )}
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <button type="submit" disabled={saving} className="flex-1 py-2.5 rounded-xl bg-[#6B5B95] text-white text-sm font-semibold hover:bg-[#5a4a84] transition disabled:opacity-60 flex items-center justify-center gap-2">
+              {saving && <Loader2 size={14} className="animate-spin" />}
+              {editCat ? "Save Changes" : "Create Category"}
+            </button>
+            <button type="button" onClick={() => setFormOpen(false)} className="px-4 py-2.5 rounded-xl bg-white border border-[#C8B6E2] text-[#3A2E5D] text-sm hover:bg-[#E6DDF1] transition">
+              Cancel
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* ── Category cards ── */}
+      <div className="space-y-3">
+        {cats.length === 0 && <div className="text-center py-12 text-[#9B8AC4]">No categories yet</div>}
+        {cats.map((cat) => {
+          const cps = catProducts(cat.id);
+          const expanded = expandedCat === cat.id;
+          return (
+            <div key={cat.id} className="rounded-2xl border border-[#C8B6E2] bg-white/80 overflow-hidden">
+              <div className="flex items-center gap-4 px-5 py-4">
+                {/* Cover image thumbnail */}
+                <div className="w-14 h-14 rounded-xl overflow-hidden bg-gradient-to-br from-[#C8B6E2] to-[#E6DDF1] flex-shrink-0">
+                  {cat.image_url ? (
+                    <img src={cat.image_url} alt={cat.name} className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center"><Sparkles size={20} className="text-white/60" /></div>
+                  )}
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-semibold text-[#3A2E5D]">{cat.name}</span>
+                    <span className="text-[10px] text-[#9B8AC4] bg-[#F0EBF9] px-2 py-0.5 rounded-full">{cat.id}</span>
+                  </div>
+                  {cat.description && <p className="text-xs text-[#9B8AC4] mt-0.5 truncate">{cat.description}</p>}
+                  <p className="text-[11px] text-[#6B5B95] font-medium mt-0.5">{cps.length} products</p>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  {/* Toggle products panel */}
+                  <button onClick={() => setExpandedCat(expanded ? null : cat.id)}
+                    className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#C8B6E2] text-[#6B5B95] text-xs font-medium hover:bg-[#F0EBF9] transition">
+                    <Layers size={12} /> Products {expanded ? <ChevronUp size={11} /> : <ChevronDown size={11} />}
+                  </button>
+                  <button onClick={() => openEdit(cat)} className="p-1.5 rounded-lg text-[#6B5B95] hover:bg-[#E6DDF1] transition"><Edit2 size={13} /></button>
+                  <button onClick={() => deleteCat(cat.id)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition"><Trash2 size={13} /></button>
+                </div>
+              </div>
+
+              {/* Products panel */}
+              {expanded && (
+                <div className="border-t border-[#E6DDF1] bg-[#FAFAF7]">
+                  {cps.length === 0 ? (
+                    <p className="px-5 py-4 text-sm text-[#9B8AC4]">No products in this category yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="bg-[#F0EBF9]">
+                            {["Product", "Price", "Stock", "Tags"].map((h) => (
+                              <th key={h} className="text-left px-4 py-2 text-[10px] uppercase tracking-wider text-[#6B5B95] font-bold whitespace-nowrap">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cps.map((p, i) => (
+                            <tr key={p.id} className={`border-t border-[#E6DDF1] ${i % 2 === 0 ? "bg-white/50" : "bg-white/20"}`}>
+                              <td className="px-4 py-2.5">
+                                <div className="font-medium text-[#3A2E5D] text-[13px]">{p.name}</div>
+                                {p.badge && <span className="text-[9px] bg-[#EBB99A] text-[#3A2E5D] font-bold px-1.5 py-0.5 rounded-full">{p.badge}</span>}
+                              </td>
+                              <td className="px-4 py-2.5 text-[#3A2E5D] font-semibold whitespace-nowrap">₹{(p.price_inr || 0).toLocaleString("en-IN")}</td>
+                              <td className="px-4 py-2.5">
+                                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${p.in_stock ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"}`}>
+                                  {p.in_stock ? "In Stock" : "Out of Stock"}
+                                </span>
+                              </td>
+                              <td className="px-4 py-2.5">
+                                <div className="flex gap-1 flex-wrap">
+                                  {(p.tags || []).map((t) => (
+                                    <span key={t} className="text-[9px] bg-[#E6DDF1] text-[#6B5B95] px-1.5 py-0.5 rounded-full">{t}</span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PRODUCTS TAB  ← updated: variants panel + image upload
+// ────────────────────────────────────────────────────────────────────────────
+const EMPTY_PRODUCT = { id: "", name: "", blurb: "", price_inr: "", product_category_id: "", badge: "", in_stock: true, tags: "" };
+
+function ProductsTab({ toast }) {
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState(EMPTY_PRODUCT);
+  const [variantRow, setVariantRow] = useState(null); // product.id whose variants panel is open
+  const [uploadingFor, setUploadingFor] = useState(null); // product.id being uploaded
+  const imgInputRef = useRef();
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      adminFetch("/admin/products"),
+      adminFetch("/admin/product-categories"),
+    ]).then(([p, c]) => {
+      setProducts(Array.isArray(p) ? p : []);
+      setCategories(Array.isArray(c) ? c : []);
+    }).catch((e) => toast(e.message, "error"))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setCheck = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.checked }));
+
+  const addProduct = async (e) => {
+    e.preventDefault();
+    try {
+      await adminFetch("/admin/products", {
+        method: "POST",
+        body: JSON.stringify({
+          ...form,
+          price_inr: parseInt(form.price_inr, 10),
+          tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
+        }),
+      });
+      toast("Product added");
+      setAdding(false);
+      setForm(EMPTY_PRODUCT);
+      load();
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const deleteProduct = async (id) => {
+    if (!window.confirm("Delete this product?")) return;
+    try {
+      await adminFetch(`/admin/products/${id}`, { method: "DELETE" });
+      setProducts((prev) => prev.filter((p) => p.id !== id));
+      toast("Deleted");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const toggleStock = async (product) => {
+    try {
+      await adminFetch(`/admin/products/${product.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ ...product, in_stock: !product.in_stock }),
+      });
+      setProducts((prev) => prev.map((p) => p.id === product.id ? { ...p, in_stock: !p.in_stock } : p));
+      toast("Updated");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const uploadImage = async (productId, file) => {
+    if (!file) return;
+    if (file.size > 4 * 1024 * 1024) { toast("Image must be under 4 MB", "error"); return; }
+    try {
+      const b64 = await fileToBase64(file);
+      await adminFetch(`/admin/products/${productId}/images`, {
+        method: "POST",
+        body: JSON.stringify({ image_data: b64 }),
+      });
+      toast("Image uploaded");
+      load();
+    } catch (e) { toast(e.message, "error"); }
+    setUploadingFor(null);
+  };
+
+  // All products in the same category as a product
+  const variantsOf = (product) => products.filter((p) => p.product_category_id === product.product_category_id && p.id !== product.id);
+
+  const catName = (id) => categories.find((c) => c.id === id)?.name || id || "—";
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 size={28} className="animate-spin text-[#6B5B95]" /></div>;
+
+  return (
+    <div>
+      {/* hidden file input for image upload */}
+      <input
+        ref={imgInputRef}
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          if (uploadingFor) uploadImage(uploadingFor, e.target.files?.[0]);
+          e.target.value = "";
+        }}
+      />
+
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-display text-xl text-[#3A2E5D]">Products ({products.length})</h3>
+        <div className="flex gap-2">
+          <button onClick={load} className="p-2 rounded-xl bg-[#E6DDF1] text-[#6B5B95] hover:bg-[#C8B6E2] transition"><RefreshCw size={14} /></button>
+          <button onClick={() => setAdding((v) => !v)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#6B5B95] text-white text-xs font-medium hover:bg-[#5a4a84] transition">
+            <Plus size={13} /> Add Product
+          </button>
+        </div>
+      </div>
+
+      {adding && (
+        <form onSubmit={addProduct} className="mb-6 p-5 rounded-2xl bg-[#F5EEF8] border border-[#C8B6E2] grid sm:grid-cols-2 gap-3">
+          <input className={inputCls} placeholder="ID (e.g. candle-new) *" value={form.id} onChange={set("id")} required />
+          <input className={inputCls} placeholder="Product name *" value={form.name} onChange={set("name")} required />
+          <input className={`${inputCls} sm:col-span-2`} placeholder="Short description / blurb" value={form.blurb} onChange={set("blurb")} />
+          <input className={inputCls} type="number" placeholder="Price (₹) *" value={form.price_inr} onChange={set("price_inr")} required />
+          <select className={inputCls} value={form.product_category_id} onChange={set("product_category_id")}>
+            <option value="">Select category</option>
+            {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <input className={inputCls} placeholder="Badge (e.g. Bestseller)" value={form.badge} onChange={set("badge")} />
+          <input className={inputCls} placeholder="Tags (comma-separated, e.g. love,money)" value={form.tags} onChange={set("tags")} />
+          <label className="flex items-center gap-2 text-sm text-[#3A2E5D]">
+            <input type="checkbox" checked={form.in_stock} onChange={setCheck("in_stock")} /> In Stock
+          </label>
+          <div className="sm:col-span-2 flex gap-2">
+            <button type="submit" className="flex-1 py-2.5 rounded-xl bg-[#6B5B95] text-white text-sm font-semibold hover:bg-[#5a4a84] transition">Add Product</button>
+            <button type="button" onClick={() => setAdding(false)} className="px-4 py-2.5 rounded-xl bg-white border border-[#C8B6E2] text-[#3A2E5D] text-sm hover:bg-[#E6DDF1] transition">Cancel</button>
+          </div>
+        </form>
+      )}
+
+      <div className="overflow-x-auto rounded-2xl border border-[#C8B6E2]">
+        <table className="w-full text-sm">
+          <thead className="bg-[#E6DDF1]">
+            <tr>
+              {["Product", "Category", "Price", "Stock", "Tags", "Actions"].map((h) => (
+                <th key={h} className="text-left px-4 py-3 text-[11px] uppercase tracking-wider text-[#6B5B95] font-bold whitespace-nowrap">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {products.length === 0 && (
+              <tr><td colSpan={6} className="text-center py-10 text-[#9B8AC4]">No products yet</td></tr>
+            )}
+            {products.map((p, idx) => {
+              const variants = variantsOf(p);
+              const isVariantOpen = variantRow === p.id;
+              return (
+                <React.Fragment key={p.id}>
+                  <tr className={`border-t border-[#E6DDF1] ${idx % 2 === 0 ? "bg-white/60" : "bg-white/30"}`}>
+                    <td className="px-4 py-3">
+                      {/* Product image thumbnail */}
+                      {p.image_url && (
+                        <img src={p.image_url.startsWith("/api/") ? `${process.env.REACT_APP_BACKEND_URL}${p.image_url}` : p.image_url}
+                          alt={p.name} className="w-8 h-8 rounded-lg object-cover mb-1.5 border border-[#C8B6E2]" />
+                      )}
+                      <div className="font-medium text-[#3A2E5D]">{p.name}</div>
+                      {p.badge && <span className="text-[10px] bg-[#EBB99A] text-[#3A2E5D] font-bold px-2 py-0.5 rounded-full">{p.badge}</span>}
+                    </td>
+                    <td className="px-4 py-3 text-[#3A2E5D]">{catName(p.product_category_id)}</td>
+                    <td className="px-4 py-3 font-semibold text-[#3A2E5D] whitespace-nowrap">₹{(p.price_inr || 0).toLocaleString("en-IN")}</td>
+                    <td className="px-4 py-3">
+                      <button onClick={() => toggleStock(p)}
+                        className={`text-[10px] font-bold uppercase tracking-wide px-3 py-1 rounded-full transition ${p.in_stock ? "bg-green-100 text-green-700 hover:bg-green-200" : "bg-red-100 text-red-600 hover:bg-red-200"}`}>
+                        {p.in_stock ? "In Stock" : "Out of Stock"}
+                      </button>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex gap-1 flex-wrap">
+                        {(p.tags || []).map((t) => (
+                          <span key={t} className="text-[10px] bg-[#E6DDF1] text-[#6B5B95] px-2 py-0.5 rounded-full">{t}</span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1">
+                        {/* Upload image */}
+                        <button
+                          title="Upload product image"
+                          onClick={() => { setUploadingFor(p.id); imgInputRef.current?.click(); }}
+                          className="p-1.5 rounded-lg text-[#9B8AC4] hover:bg-[#E6DDF1] transition">
+                          <ImagePlus size={13} />
+                        </button>
+                        {/* Variants panel toggle */}
+                        {variants.length > 0 && (
+                          <button
+                            title={`View ${variants.length} related products`}
+                            onClick={() => setVariantRow(isVariantOpen ? null : p.id)}
+                            className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wide transition ${isVariantOpen ? "bg-[#6B5B95] text-white" : "bg-[#F0EBF9] text-[#6B5B95] hover:bg-[#E6DDF1]"}`}>
+                            <Layers size={11} /> {variants.length}
+                          </button>
+                        )}
+                        <button onClick={() => deleteProduct(p.id)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition"><Trash2 size={13} /></button>
+                      </div>
+                    </td>
+                  </tr>
+
+                  {/* ── Variants panel ── shows all other products in same category */}
+                  {isVariantOpen && (
+                    <tr className="bg-[#F5EEF8]">
+                      <td colSpan={6} className="px-4 py-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Layers size={13} className="text-[#6B5B95]" />
+                          <span className="text-xs font-bold text-[#6B5B95] uppercase tracking-wide">
+                            Other products in "{catName(p.product_category_id)}"
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                          {variants.map((v) => (
+                            <div key={v.id} className="flex items-center gap-2 bg-white rounded-xl border border-[#C8B6E2] px-3 py-2">
+                              {v.image_url && (
+                                <img src={v.image_url.startsWith("/api/") ? `${process.env.REACT_APP_BACKEND_URL}${v.image_url}` : v.image_url}
+                                  alt={v.name} className="w-8 h-8 rounded-lg object-cover flex-shrink-0 border border-[#C8B6E2]" />
+                              )}
+                              <div className="min-w-0">
+                                <p className="text-[12px] font-semibold text-[#3A2E5D] truncate">{v.name}</p>
+                                <p className="text-[11px] text-[#9B8AC4]">₹{(v.price_inr || 0).toLocaleString("en-IN")}</p>
+                                <span className={`text-[9px] font-bold ${v.in_stock ? "text-green-600" : "text-red-500"}`}>
+                                  {v.in_stock ? "In Stock" : "Out"}
+                                </span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// PROMOTIONS TAB
+// ────────────────────────────────────────────────────────────────────────────
+const EMPTY_PROMO = {
+  id: "", code: "", title: "", discount_type: "percent", discount_value: "",
+  scope: "site_wide", active: true, show_banner: true, banner_text: "",
+  min_order_inr: 0, starts_at: "", ends_at: "",
+};
+
+function PromotionsTab({ toast }) {
+  const [promos, setPromos] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState(EMPTY_PROMO);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    adminFetch("/admin/promotions")
+      .then((r) => setPromos(Array.isArray(r) ? r : []))
+      .catch((e) => toast(e.message, "error"))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const setCheck = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.checked }));
+
+  const addPromo = async (e) => {
+    e.preventDefault();
+    try {
+      await adminFetch("/admin/promotions", {
+        method: "POST",
+        body: JSON.stringify({ ...form, discount_value: parseFloat(form.discount_value), min_order_inr: parseInt(form.min_order_inr, 10) || 0 }),
+      });
+      toast("Promotion created");
+      setAdding(false);
+      load();
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  const deletePromo = async (id) => {
+    if (!window.confirm("Delete this promotion?")) return;
+    try {
+      await adminFetch(`/admin/promotions/${id}`, { method: "DELETE" });
+      setPromos((prev) => prev.filter((p) => p.id !== id));
+      toast("Deleted");
+    } catch (e) { toast(e.message, "error"); }
+  };
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 size={28} className="animate-spin text-[#6B5B95]" /></div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-display text-xl text-[#3A2E5D]">Promotions ({promos.length})</h3>
+        <div className="flex gap-2">
+          <button onClick={load} className="p-2 rounded-xl bg-[#E6DDF1] text-[#6B5B95] hover:bg-[#C8B6E2] transition"><RefreshCw size={14} /></button>
+          <button onClick={() => setAdding((v) => !v)} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#6B5B95] text-white text-xs font-medium hover:bg-[#5a4a84] transition">
+            <Plus size={13} /> New Promo
+          </button>
+        </div>
+      </div>
+
+      {adding && (
+        <form onSubmit={addPromo} className="mb-6 p-5 rounded-2xl bg-[#F5EEF8] border border-[#C8B6E2] grid sm:grid-cols-2 gap-3">
+          <input className={inputCls} placeholder="ID (unique)" value={form.id} onChange={set("id")} required />
+          <input className={inputCls} placeholder="Coupon code (e.g. LOVE20)" value={form.code} onChange={set("code")} />
+          <input className={`${inputCls} sm:col-span-2`} placeholder="Title / description" value={form.title} onChange={set("title")} required />
+          <select className={inputCls} value={form.discount_type} onChange={set("discount_type")}>
+            <option value="percent">Percent off</option>
+            <option value="flat">Flat amount off</option>
+          </select>
+          <input className={inputCls} type="number" placeholder="Discount value" value={form.discount_value} onChange={set("discount_value")} required />
+          <select className={inputCls} value={form.scope} onChange={set("scope")}>
+            <option value="site_wide">Site-wide</option>
+            <option value="services_only">Services only</option>
+            <option value="products_only">Products only</option>
+          </select>
+          <input className={inputCls} type="number" placeholder="Min order (₹)" value={form.min_order_inr} onChange={set("min_order_inr")} />
+          <input className={inputCls} placeholder="Banner text (optional)" value={form.banner_text} onChange={set("banner_text")} />
+          <input className={inputCls} placeholder="Ends at (YYYY-MM-DDTHH:MM:SSZ)" value={form.ends_at} onChange={set("ends_at")} />
+          <div className="flex gap-4">
+            <label className="flex items-center gap-1.5 text-sm text-[#3A2E5D]">
+              <input type="checkbox" checked={form.active} onChange={setCheck("active")} /> Active
+            </label>
+            <label className="flex items-center gap-1.5 text-sm text-[#3A2E5D]">
+              <input type="checkbox" checked={form.show_banner} onChange={setCheck("show_banner")} /> Show banner
+            </label>
+          </div>
+          <div className="sm:col-span-2 flex gap-2">
+            <button type="submit" className="flex-1 py-2.5 rounded-xl bg-[#6B5B95] text-white text-sm font-semibold hover:bg-[#5a4a84] transition">Create Promotion</button>
+            <button type="button" onClick={() => setAdding(false)} className="px-4 py-2.5 rounded-xl bg-white border border-[#C8B6E2] text-[#3A2E5D] text-sm hover:bg-[#E6DDF1] transition">Cancel</button>
+          </div>
+        </form>
+      )}
+
+      <div className="space-y-3">
+        {promos.length === 0 && <div className="text-center py-10 text-[#9B8AC4]">No promotions yet</div>}
+        {promos.map((p) => (
+          <div key={p.id} className="flex items-center justify-between bg-white/70 border border-[#C8B6E2] rounded-2xl px-5 py-4">
+            <div>
+              {p.code && (
+                <span className="bg-[#EBB99A] text-[#3A2E5D] text-xs font-bold tracking-widest uppercase px-3 py-1 rounded-full mr-2">{p.code}</span>
+              )}
+              <span className="font-medium text-[#3A2E5D] text-sm">{p.title}</span>
+              <div className="text-[11px] text-[#9B8AC4] mt-1">
+                {p.discount_type === "percent" ? `${p.discount_value}% off` : `₹${p.discount_value} off`}
+                {" · "}{p.scope}{" · "}{p.active ? "Active" : "Inactive"}
+              </div>
+            </div>
+            <button onClick={() => deletePromo(p.id)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition ml-4"><Trash2 size={13} /></button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// MAIN DASHBOARD
+// ────────────────────────────────────────────────────────────────────────────
+const TABS = [
+  { id: "stats",      label: "Overview",    icon: BarChart2 },
+  { id: "bookings",   label: "Bookings",    icon: BookOpen },
+  { id: "orders",     label: "Orders",      icon: ShoppingBag },
+  { id: "categories", label: "Categories",  icon: FolderOpen },
+  { id: "products",   label: "Products",    icon: Package },
+  { id: "promotions", label: "Promos",      icon: Tag },
 ];
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState(null);
-  const [bookings, setBookings] = useState([]);
-  const [blockedDates, setBlockedDates] = useState([]);
-  const [newBlockDate, setNewBlockDate] = useState(null); // Date object
-  const [newBlockReason, setNewBlockReason] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState("all"); // all | paid | pending | failed
-  const [statusFilter, setStatusFilter] = useState("all"); // all | confirmed | completed | cancelled | no_show | pending
-  const [period, setPeriod] = useState("all"); // all | week | month | year
-  const [services, setServices] = useState([]);
-  const [createOpen, setCreateOpen] = useState(false);
-  const [createForm, setCreateForm] = useState({
-    service_id: "",
-    customer_name: "",
-    customer_email: "",
-    customer_phone: "",
-    booking_date: "",
-    booking_slot: "",
-    question: "",
-    notes: "",
-    booking_status: "confirmed",
-    payment_status: "paid",
-  });
-  const [creating, setCreating] = useState(false);
+  const [activeTab, setActiveTab] = useState("stats");
+  const { show: showToast, el: toastEl } = useToast();
 
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("ga_admin_token") : null;
-  const headers = { Authorization: `Bearer ${token}` };
-
+  // Verify token on mount
   useEffect(() => {
-    if (!token) {
-      navigate("/admin/login");
-      return;
-    }
-    refresh();
-    // eslint-disable-next-line
-  }, [period]);
+    const tok = localStorage.getItem("admin_token");
+    if (!tok) { navigate("/admin/login"); return; }
+    fetch(`${API}/admin/stats`, { headers: { Authorization: `Bearer ${tok}` } })
+      .then((r) => { if (!r.ok) throw new Error("Unauthorized"); })
+      .catch(() => { localStorage.removeItem("admin_token"); navigate("/admin/login"); });
+  }, [navigate]);
 
-  const refresh = async () => {
-    setLoading(true);
-    try {
-      const [s, b, bd, sv] = await Promise.all([
-        axios.get(`${API}/admin/stats?period=${period}`, { headers }),
-        axios.get(`${API}/admin/bookings`, { headers }),
-        axios.get(`${API}/admin/blocked-dates`, { headers }),
-        axios.get(`${API}/services`),
-      ]);
-      setStats(s.data);
-      setBookings(b.data || []);
-      setBlockedDates(bd.data || []);
-      setServices(sv.data || []);
-    } catch (e) {
-      if (e?.response?.status === 401) {
-        localStorage.removeItem("ga_admin_token");
-        navigate("/admin/login");
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const addBlocked = async (e) => {
-    e.preventDefault();
-    if (!newBlockDate) return;
-    try {
-      const dateStr = format(newBlockDate, "yyyy-MM-dd");
-      await axios.post(
-        `${API}/admin/blocked-dates`,
-        { date: dateStr, reason: newBlockReason || "Unavailable" },
-        { headers }
-      );
-      toast.success("Date blocked ✦");
-      setNewBlockDate(null);
-      setNewBlockReason("");
-      refresh();
-    } catch {
-      toast.error("Could not block date");
-    }
-  };
-
-  const removeBlocked = async (date) => {
-    try {
-      await axios.delete(`${API}/admin/blocked-dates/${date}`, { headers });
-      toast.success("Date unblocked");
-      refresh();
-    } catch {
-      toast.error("Could not remove");
-    }
-  };
-
-  const updateBookingStatus = async (booking_id, booking_status) => {
-    try {
-      await axios.patch(
-        `${API}/admin/bookings/${booking_id}`,
-        { booking_status },
-        { headers }
-      );
-      toast.success(`Marked ${booking_status.replace("_", " ")} ✦`);
-      refresh();
-    } catch {
-      toast.error("Could not update");
-    }
-  };
-
-  const deleteBooking = async (b) => {
-    if (
-      !window.confirm(
-        `Delete booking for "${b.customer_name}" (${b.service_name})?\n\nThis is irreversible.`
-      )
-    )
-      return;
-    try {
-      await axios.delete(`${API}/admin/bookings/${b.id}`, { headers });
-      toast.success("Booking deleted");
-      refresh();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not delete");
-    }
-  };
-
-  const downloadFile = async (url, fallbackName) => {
-    try {
-      const res = await axios.get(url, {
-        headers,
-        responseType: "blob",
-      });
-      const blob = new Blob([res.data], { type: "text/csv;charset=utf-8" });
-      const cd = res.headers["content-disposition"] || "";
-      const m = cd.match(/filename="?([^"]+)"?/);
-      const fname = (m && m[1]) || fallbackName;
-      const link = document.createElement("a");
-      link.href = window.URL.createObjectURL(blob);
-      link.download = fname;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(link.href);
-      toast.success(`Downloaded ${fname}`);
-    } catch (e) {
-      toast.error("Download failed");
-    }
-  };
-
-  const submitCreateBooking = async (e) => {
-    e?.preventDefault();
-    if (!createForm.service_id) {
-      toast.error("Pick a service");
-      return;
-    }
-    if (
-      !createForm.customer_name ||
-      !createForm.customer_email ||
-      !createForm.customer_phone
-    ) {
-      toast.error("Customer name, email and phone are required");
-      return;
-    }
-    setCreating(true);
-    try {
-      await axios.post(
-        `${API}/admin/bookings`,
-        {
-          service_id: createForm.service_id,
-          customer_name: createForm.customer_name,
-          customer_email: createForm.customer_email,
-          customer_phone: createForm.customer_phone,
-          booking_date: createForm.booking_date || null,
-          booking_slot: createForm.booking_slot || null,
-          question: createForm.question || null,
-          notes: createForm.notes || null,
-          booking_status: createForm.booking_status,
-          payment_status: createForm.payment_status,
-        },
-        { headers }
-      );
-      toast.success("Booking added ✦");
-      setCreateOpen(false);
-      setCreateForm({
-        service_id: "",
-        customer_name: "",
-        customer_email: "",
-        customer_phone: "",
-        booking_date: "",
-        booking_slot: "",
-        question: "",
-        notes: "",
-        booking_status: "confirmed",
-        payment_status: "paid",
-      });
-      refresh();
-    } catch (e) {
-      toast.error(e?.response?.data?.detail || "Could not add booking");
-    } finally {
-      setCreating(false);
-    }
-  };
-
-  const filtered = useMemo(() => {
-    return bookings.filter((b) => {
-      if (filter !== "all" && b.payment_status !== filter) return false;
-      if (statusFilter !== "all" && b.booking_status !== statusFilter)
-        return false;
-      return true;
-    });
-  }, [bookings, filter, statusFilter]);
-
-  const logout = () => {
-    localStorage.removeItem("ga_admin_token");
-    navigate("/admin/login");
-  };
+  const logout = () => { localStorage.removeItem("admin_token"); navigate("/admin/login"); };
 
   return (
-    <div className="min-h-screen bg-ivory aurora-bg">
-      <Toaster richColors position="top-center" />
-      <header className="border-b border-peach/30 bg-ivory/90 backdrop-blur sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-6 sm:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <img
-              src={BRAND.logoRound}
-              alt="GA"
-              className="w-9 h-9 rounded-full"
-            />
-            <div className="font-display italic text-lg text-lavender-deep">
-              guidance{" "}
-              <span className="not-italic text-peach-deep">angel</span>
-              <span className="text-xs not-italic ml-2 text-ink-plum/50">
-                Admin
-              </span>
-            </div>
+    <div className="min-h-screen bg-[#F5EEF8]">
+      {toastEl}
+      <div className="flex">
+        {/* Sidebar */}
+        <aside className="hidden lg:flex flex-col w-64 min-h-screen bg-[#3A2E5D] text-white fixed left-0 top-0 z-30">
+          <div className="px-6 py-8 border-b border-white/10">
+            <div className="text-[10px] uppercase tracking-[0.3em] text-[#EBB99A]/70">Admin Panel</div>
+            <div className="font-display text-xl italic mt-1">guidance angel</div>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              data-testid="admin-refresh"
-              onClick={refresh}
-              className="inline-flex items-center gap-2 rounded-full border border-peach/40 bg-white px-4 py-2 text-sm hover:bg-peach/10"
-            >
-              <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
-              Refresh
-            </button>
-            <button
-              data-testid="admin-logout"
-              onClick={logout}
-              className="inline-flex items-center gap-2 rounded-full bg-lavender-deep text-ivory px-4 py-2 text-sm hover:bg-lavender-deeper"
-            >
-              <LogOut size={14} /> Logout
+          <nav className="flex-1 px-4 py-6 space-y-1">
+            {TABS.map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-medium transition ${
+                  activeTab === tab.id ? "bg-[#6B5B95] text-white shadow-md" : "text-white/70 hover:bg-white/10"
+                }`}>
+                <tab.icon size={15} /> {tab.label}
+              </button>
+            ))}
+          </nav>
+          <div className="px-4 py-5 border-t border-white/10">
+            <a href="/" className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white/70 hover:bg-white/10 transition">
+              <Sparkles size={14} /> View Site
+            </a>
+            <button onClick={logout} className="w-full flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm text-white/70 hover:bg-red-500/20 hover:text-red-300 transition">
+              <LogOut size={14} /> Sign Out
             </button>
           </div>
+        </aside>
+
+        {/* Mobile top bar */}
+        <div className="lg:hidden fixed top-0 inset-x-0 z-30 bg-[#3A2E5D] text-white px-4 py-3 flex items-center justify-between">
+          <span className="font-display text-lg italic">guidance angel <span className="text-[10px] tracking-widest text-[#EBB99A]/70 not-italic">admin</span></span>
+          <button onClick={logout} className="p-2 rounded-xl bg-white/10 hover:bg-white/20"><LogOut size={15} /></button>
         </div>
-      </header>
 
-      <main className="max-w-7xl mx-auto px-6 sm:px-8 py-10">
-        <h1 className="font-display text-3xl sm:text-4xl text-ink-plum">
-          Admin Sanctum
-        </h1>
-        <p className="text-sm text-ink-plum/60 mt-1">
-          Full control over your bookings, services, products and content.
-        </p>
-
-        <Tabs defaultValue="bookings" className="mt-8">
-          <TabsList
-            data-testid="admin-tabs"
-            className="bg-white/85 border border-peach/30 rounded-full p-1 inline-flex flex-wrap h-auto gap-1"
-          >
-            <TabsTrigger value="bookings" data-testid="tab-bookings" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
-              Bookings
-            </TabsTrigger>
-            <TabsTrigger value="schedule" data-testid="tab-schedule" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
-              Schedule
-            </TabsTrigger>
-            <TabsTrigger value="services" data-testid="tab-services" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
-              Services
-            </TabsTrigger>
-            <TabsTrigger value="categories" data-testid="tab-categories" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
-              Service Categories
-            </TabsTrigger>
-            <TabsTrigger value="products" data-testid="tab-products" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
-              Shop
-            </TabsTrigger>
-            <TabsTrigger value="product-categories" data-testid="tab-product-categories" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
-              Shop Categories
-            </TabsTrigger>
-            <TabsTrigger value="orders" data-testid="tab-orders" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
-              Orders
-            </TabsTrigger>
-            <TabsTrigger value="promotions" data-testid="tab-promotions" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
-              Promotions
-            </TabsTrigger>
-            <TabsTrigger value="testimonials" data-testid="tab-testimonials" className="rounded-full px-4 py-1.5 text-sm data-[state=active]:bg-lavender-deep data-[state=active]:text-ivory">
-              Testimonials
-            </TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="bookings" className="mt-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-              <div className="text-xs uppercase tracking-[0.22em] text-peach-deep font-bold">
-                ✦ Bookings
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  data-testid="bookings-export-csv"
-                  onClick={() =>
-                    downloadFile(
-                      `${API}/admin/bookings/export`,
-                      "bookings.csv"
-                    )
-                  }
-                  className="inline-flex items-center gap-2 rounded-full border border-peach/40 bg-white px-4 py-2 text-sm hover:bg-peach/10"
-                >
-                  <Download size={14} /> Download CSV
-                </button>
-                <button
-                  data-testid="bookings-add-btn"
-                  onClick={() => setCreateOpen(true)}
-                  className="inline-flex items-center gap-2 rounded-full bg-lavender-deep text-ivory px-4 py-2 text-sm hover:bg-lavender-deeper"
-                >
-                  <UserPlus size={14} /> Add Booking
-                </button>
-              </div>
-            </div>
-            <div className="rounded-3xl bg-gradient-to-br from-[#6B5B95] via-[#9B8AC4] to-[#6B5B95] text-ivory p-5 sm:p-6 shadow-[0_18px_42px_-15px_rgba(58,46,93,0.45)]">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="text-[10px] tracking-[0.32em] uppercase text-[#EBB99A] font-bold">
-                    ✦ Combined Revenue
-                  </div>
-                  <div className="font-display text-4xl sm:text-5xl mt-1.5">
-                    ₹{(stats?.combined_revenue_inr ?? stats?.revenue_inr ?? 0).toLocaleString("en-IN")}
-                  </div>
-                  <div className="text-xs text-ivory/75 mt-1.5">
-                    Bookings ₹{(stats?.bookings?.revenue_inr ?? 0).toLocaleString("en-IN")} ·
-                    Shop ₹{(stats?.orders?.revenue_inr ?? 0).toLocaleString("en-IN")}
-                    {(stats?.combined_discount_inr ?? 0) > 0 && (
-                      <> · Discount given ₹{stats.combined_discount_inr.toLocaleString("en-IN")}</>
-                    )}
-                  </div>
-                </div>
-                <div
-                  data-testid="period-filter"
-                  className="inline-flex bg-white/15 rounded-full p-1 text-xs"
-                >
-                  {[
-                    ["week", "This week"],
-                    ["month", "This month"],
-                    ["year", "This year"],
-                    ["all", "All time"],
-                  ].map(([v, label]) => (
-                    <button
-                      key={v}
-                      data-testid={`period-${v}`}
-                      onClick={() => setPeriod(v)}
-                      className={`px-3 py-1.5 rounded-full transition ${
-                        period === v
-                          ? "bg-ivory text-ink-plum font-semibold"
-                          : "text-ivory/85 hover:text-ivory"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
-              {[
-                ["Bookings", stats?.bookings?.total ?? 0],
-                ["Booking Revenue (₹)", `₹${(stats?.bookings?.revenue_inr ?? 0).toLocaleString("en-IN")}`],
-                ["Paid bookings", stats?.bookings?.paid ?? 0],
-                ["Pending bookings", stats?.bookings?.pending ?? 0],
-              ].map(([label, val]) => (
-                <div
-                  key={label}
-                  data-testid={`stat-${label.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`}
-                  className="rounded-2xl bg-white/85 border border-peach/30 px-5 py-5 shadow-soft"
-                >
-                  <div className="text-[11px] tracking-[0.22em] uppercase text-peach-deep">
-                    {label}
-                  </div>
-                  <div className="font-display text-2xl text-lavender-deep mt-1">
-                    {val}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-        {/* Block-out dates moved into Schedule tab below */}
-        </TabsContent>
-
-        <TabsContent value="schedule" className="mt-6 space-y-6">
-          <SettingsPanel token={token} />
-
-          <div className="rounded-3xl bg-white/85 border border-peach/30 p-6 sm:p-8">
-          <div className="flex items-center gap-2">
-            <CalendarOff size={18} className="text-lavender-deep" />
-            <h2 className="font-display text-xl text-ink-plum">
-              Block-out dates
-            </h2>
-          </div>
-          <p className="text-sm text-ink-plum/60 mt-1">
-            Mark dates when you're unavailable. Booking calendar will hide them.
-          </p>
-
-          <form
-            onSubmit={addBlocked}
-            data-testid="blocked-form"
-            className="mt-5 flex flex-wrap items-end gap-3"
-          >
-            <div>
-              <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep">
-                Date
-              </label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    data-testid="blocked-date-input"
-                    className="mt-1.5 inline-flex items-center gap-2 rounded-xl border border-peach/30 bg-white px-3 py-2 text-sm hover:border-lavender-deep min-w-[180px] justify-between"
-                  >
-                    <span className={newBlockDate ? "text-ink-plum" : "text-ink-plum/50"}>
-                      {newBlockDate ? format(newBlockDate, "EEE, dd MMM yyyy") : "Pick a date"}
-                    </span>
-                    <CalendarIcon size={14} className="text-lavender-deep" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-white border-peach/30 rounded-2xl" align="start">
-                  <Calendar
-                    mode="single"
-                    selected={newBlockDate}
-                    onSelect={setNewBlockDate}
-                    disabled={(d) => {
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      return d < today;
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
-            </div>
-            <div className="flex-1 min-w-[200px]">
-              <label className="block text-[11px] uppercase tracking-[0.22em] text-peach-deep">
-                Reason (optional)
-              </label>
-              <input
-                data-testid="blocked-reason-input"
-                value={newBlockReason}
-                onChange={(e) => setNewBlockReason(e.target.value)}
-                placeholder="Vacation, retreat, personal day…"
-                className="mt-1.5 w-full rounded-xl border border-peach/30 bg-white px-3 py-2 outline-none focus:border-lavender-deep focus:ring-2 focus:ring-peach/40"
-              />
-            </div>
-            <button
-              type="submit"
-              data-testid="blocked-add-btn"
-              disabled={!newBlockDate}
-              className="inline-flex items-center gap-1.5 bg-lavender-deep text-ivory rounded-full px-5 py-2.5 text-sm hover:bg-lavender-deeper disabled:opacity-50"
-            >
-              <Plus size={14} /> Block
-            </button>
-          </form>
-
-          <div className="mt-6 flex flex-wrap gap-2">
-            {blockedDates.length === 0 && (
-              <span className="text-sm text-ink-plum/60">
-                No blocked dates yet.
-              </span>
-            )}
-            {blockedDates.map((bd) => (
-              <span
-                key={bd.date}
-                data-testid={`blocked-${bd.date}`}
-                className="inline-flex items-center gap-2 bg-peach/15 border border-peach/40 text-ink-plum rounded-full pl-3 pr-1 py-1 text-sm"
-              >
-                <span className="font-medium">{bd.date}</span>
-                {bd.reason && (
-                  <span className="text-ink-plum/60 text-xs">· {bd.reason}</span>
-                )}
-                <button
-                  onClick={() => removeBlocked(bd.date)}
-                  className="ml-1 w-6 h-6 inline-flex items-center justify-center rounded-full hover:bg-peach/40"
-                  aria-label="Remove"
-                >
-                  <X size={12} />
-                </button>
-              </span>
+        {/* Main content */}
+        <main className="flex-1 lg:ml-64 p-6 lg:p-10 pt-16 lg:pt-10">
+          {/* Mobile tab bar */}
+          <div className="lg:hidden flex gap-2 overflow-x-auto pb-4 mb-6">
+            {TABS.map((tab) => (
+              <button key={tab.id} onClick={() => setActiveTab(tab.id)}
+                className={`flex items-center gap-1.5 px-3 py-2 rounded-full text-xs font-medium whitespace-nowrap transition ${
+                  activeTab === tab.id ? "bg-[#6B5B95] text-white" : "bg-white border border-[#C8B6E2] text-[#3A2E5D]"
+                }`}>
+                <tab.icon size={12} /> {tab.label}
+              </button>
             ))}
           </div>
-        </div>
-        </TabsContent>
 
-        <TabsContent value="bookings" className="space-y-0 mt-0">
-        <div className="mt-6 rounded-3xl bg-white/85 border border-peach/30 overflow-hidden">
-          {/* Filters */}
-          <div className="flex flex-wrap items-center gap-3 px-5 py-4 border-b border-peach/20 bg-ivory-deep/30">
-            <div className="inline-flex items-center gap-2 text-xs uppercase tracking-[0.2em] text-peach-deep">
-              <Filter size={12} /> Filter
-            </div>
-            <div className="inline-flex items-center gap-1 bg-white rounded-full border border-peach/30 p-1">
-              {[
-                ["all", "All"],
-                ["paid", "Paid"],
-                ["pending", "Pending"],
-                ["failed", "Failed"],
-              ].map(([k, lbl]) => (
-                <button
-                  key={k}
-                  data-testid={`filter-pay-${k}`}
-                  onClick={() => setFilter(k)}
-                  className={`px-3 py-1 text-xs rounded-full transition ${
-                    filter === k
-                      ? "bg-lavender-deep text-ivory"
-                      : "text-ink-plum/70 hover:bg-peach/15"
-                  }`}
-                >
-                  {lbl}
-                </button>
-              ))}
-            </div>
-            <div className="inline-flex items-center gap-1 bg-white rounded-full border border-peach/30 p-1">
-              {[["all", "All"]].concat(STATUS_OPTIONS.map((o) => [o.value, o.label])).map(([k, lbl]) => (
-                <button
-                  key={k}
-                  data-testid={`filter-status-${k}`}
-                  onClick={() => setStatusFilter(k)}
-                  className={`px-3 py-1 text-xs rounded-full transition ${
-                    statusFilter === k
-                      ? "bg-lavender-deep text-ivory"
-                      : "text-ink-plum/70 hover:bg-peach/15"
-                  }`}
-                >
-                  {lbl}
-                </button>
-              ))}
-            </div>
-            <div className="ml-auto text-xs text-ink-plum/60">
-              {filtered.length} of {bookings.length} bookings
-            </div>
-          </div>
-
-          <div className="overflow-x-auto -mx-4 sm:mx-0">
-            <Table data-testid="admin-bookings-table" className="min-w-[820px]">
-            <TableHeader className="bg-ivory-deep/50">
-              <TableRow>
-                <TableHead>Customer</TableHead>
-                <TableHead>Service</TableHead>
-                <TableHead>Date / Slot</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Payment</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Reach</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-ink-plum/60">
-                    {bookings.length === 0
-                      ? "No bookings yet. The first soul is on the way."
-                      : "No bookings match these filters."}
-                  </TableCell>
-                </TableRow>
-              )}
-              {filtered.map((b) => (
-                <TableRow key={b.id} data-testid={`row-${b.id}`}>
-                  <TableCell>
-                    <div className="font-medium text-ink-plum">
-                      {b.customer_name}
-                    </div>
-                    <div className="text-xs text-ink-plum/60">
-                      {b.customer_email}
-                    </div>
-                    <div className="text-xs text-ink-plum/60">
-                      {b.customer_phone}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {b.service_name}
-                    <div className="text-xs text-ink-plum/60">
-                      ID: {b.service_id}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {b.booking_date ? (
-                      <>
-                        <div>{b.booking_date}</div>
-                        <div className="text-xs text-ink-plum/60">
-                          {b.booking_slot}
-                        </div>
-                      </>
-                    ) : (
-                      <span className="text-ink-plum/60 text-xs">
-                        Voice note
-                      </span>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-display text-lavender-deep">
-                    {b.final_price_inr != null && b.final_price_inr !== b.service_price_inr ? (
-                      <div className="flex flex-col">
-                        <span>₹{b.final_price_inr.toLocaleString("en-IN")}</span>
-                        <span className="text-[10px] text-ink-plum/40 font-normal line-through">
-                          ₹{b.service_price_inr?.toLocaleString("en-IN")}
-                        </span>
-                        {b.applied_coupon_code && (
-                          <span className="text-[10px] text-peach-deep font-semibold tracking-wide">
-                            {b.applied_coupon_code}
-                          </span>
-                        )}
-                      </div>
-                    ) : (
-                      <span>₹{(b.final_price_inr ?? b.service_price_inr ?? 0).toLocaleString("en-IN")}</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={PAY_COLOR(b.payment_status)}>
-                      {b.payment_status}
-                      {b.is_mock_payment ? " · mock" : ""}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          data-testid={`status-dropdown-${b.id}`}
-                          className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-medium ${STATUS_COLOR(b.booking_status)}`}
-                        >
-                          {(b.booking_status || "pending").replace("_", " ")}
-                          <ChevronDown size={12} />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start" className="bg-white border-peach/30">
-                        {STATUS_OPTIONS.map((opt) => (
-                          <DropdownMenuItem
-                            key={opt.value}
-                            data-testid={`status-set-${opt.value}-${b.id}`}
-                            onClick={() => updateBookingStatus(b.id, opt.value)}
-                            className="cursor-pointer"
-                          >
-                            {b.booking_status === opt.value ? (
-                              <Check size={14} className="mr-2 text-lavender-deep" />
-                            ) : (
-                              <span className="w-[14px] mr-2" />
-                            )}
-                            {opt.label}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1.5 flex-wrap">
-                      <a
-                        href={`https://wa.me/${b.customer_phone.replace(/\D/g, "")}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-peach/20 text-lavender-deep hover:bg-peach/40"
-                        title="WhatsApp"
-                      >
-                        <MessageCircle size={14} />
-                      </a>
-                      <a
-                        href={`mailto:${b.customer_email}`}
-                        className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-peach/20 text-lavender-deep hover:bg-peach/40"
-                        title="Email"
-                      >
-                        <Mail size={14} />
-                      </a>
-                      <a
-                        href={`tel:${b.customer_phone}`}
-                        className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-peach/20 text-lavender-deep hover:bg-peach/40"
-                        title="Call"
-                      >
-                        <Phone size={14} />
-                      </a>
-                      <button
-                        type="button"
-                        data-testid={`booking-delete-${b.id}`}
-                        onClick={() => deleteBooking(b)}
-                        className="w-8 h-8 inline-flex items-center justify-center rounded-full bg-red-50 text-red-500 hover:bg-red-100"
-                        title="Delete booking"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          </div>
-        </div>
-        </TabsContent>
-
-        <TabsContent value="services" className="mt-6">
-          <ServicesPanel token={token} />
-        </TabsContent>
-
-        <TabsContent value="categories" className="mt-6">
-          <CategoriesPanel token={token} />
-        </TabsContent>
-
-        <TabsContent value="products" className="mt-6">
-          <ProductsPanel token={token} />
-        </TabsContent>
-
-        <TabsContent value="product-categories" className="mt-6">
-          <ProductCategoriesPanel token={token} />
-        </TabsContent>
-
-        <TabsContent value="orders" className="mt-6">
-          <OrdersPanel token={token} />
-        </TabsContent>
-
-        <TabsContent value="promotions" className="mt-6">
-          <PromotionsPanel token={token} />
-        </TabsContent>
-
-        <TabsContent value="testimonials" className="mt-6">
-          <TestimonialsPanel token={token} />
-        </TabsContent>
-        </Tabs>
-      </main>
-
-      {/* Add booking dialog */}
-      {createOpen && (
-        <div
-          data-testid="add-booking-dialog"
-          className="fixed inset-0 z-[80] flex items-center justify-center bg-ink-plum/40 backdrop-blur-sm p-4 overflow-y-auto"
-          onClick={() => setCreateOpen(false)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-2xl bg-white rounded-3xl border border-peach/30 shadow-soft-xl my-8"
-          >
-            <div className="px-6 py-4 border-b border-peach/30 flex items-center justify-between bg-ivory-deep/40 rounded-t-3xl">
-              <div>
-                <div className="text-[10px] uppercase tracking-[0.32em] text-peach-deep font-bold">
-                  ✦ Manual Entry
-                </div>
-                <h3 className="font-display text-xl text-ink-plum">
-                  Add a booking
-                </h3>
-              </div>
-              <button
-                onClick={() => setCreateOpen(false)}
-                className="w-8 h-8 inline-flex items-center justify-center rounded-full hover:bg-peach/20 text-ink-plum/60"
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <form onSubmit={submitCreateBooking} className="p-6 space-y-4">
-              <div>
-                <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
-                  Service *
-                </label>
-                <select
-                  data-testid="add-booking-service"
-                  value={createForm.service_id}
-                  onChange={(e) =>
-                    setCreateForm({ ...createForm, service_id: e.target.value })
-                  }
-                  className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 text-ink-plum focus:border-lavender-deep outline-none"
-                  required
-                >
-                  <option value="">— Pick a service —</option>
-                  {services.map((sv) => (
-                    <option key={sv.id} value={sv.id}>
-                      {sv.name} · ₹{sv.price_inr}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="grid sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
-                    Customer name *
-                  </label>
-                  <input
-                    data-testid="add-booking-name"
-                    value={createForm.customer_name}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, customer_name: e.target.value })
-                    }
-                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
-                    Phone *
-                  </label>
-                  <input
-                    data-testid="add-booking-phone"
-                    value={createForm.customer_phone}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, customer_phone: e.target.value })
-                    }
-                    placeholder="+91…"
-                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
-                    required
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
-                    Email *
-                  </label>
-                  <input
-                    type="email"
-                    data-testid="add-booking-email"
-                    value={createForm.customer_email}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, customer_email: e.target.value })
-                    }
-                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
-                    Date{" "}
-                    <span className="text-ink-plum/40 normal-case tracking-normal text-[10px]">
-                      (yyyy-mm-dd)
-                    </span>
-                  </label>
-                  <input
-                    data-testid="add-booking-date"
-                    type="date"
-                    value={createForm.booking_date}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, booking_date: e.target.value })
-                    }
-                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
-                    Slot{" "}
-                    <span className="text-ink-plum/40 normal-case tracking-normal text-[10px]">
-                      (e.g. 11:00 AM)
-                    </span>
-                  </label>
-                  <input
-                    data-testid="add-booking-slot"
-                    value={createForm.booking_slot}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, booking_slot: e.target.value })
-                    }
-                    placeholder="11:00 AM"
-                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
-                    Booking status
-                  </label>
-                  <select
-                    data-testid="add-booking-status"
-                    value={createForm.booking_status}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, booking_status: e.target.value })
-                    }
-                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
-                  >
-                    {STATUS_OPTIONS.map((o) => (
-                      <option key={o.value} value={o.value}>
-                        {o.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
-                    Payment status
-                  </label>
-                  <select
-                    data-testid="add-booking-payment"
-                    value={createForm.payment_status}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, payment_status: e.target.value })
-                    }
-                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
-                  >
-                    <option value="paid">Paid (offline / cash)</option>
-                    <option value="pending">Pending</option>
-                    <option value="failed">Failed</option>
-                  </select>
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
-                    Customer's question / context
-                  </label>
-                  <textarea
-                    data-testid="add-booking-question"
-                    rows={2}
-                    value={createForm.question}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, question: e.target.value })
-                    }
-                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="block text-[11px] uppercase tracking-[0.2em] text-peach-deep font-semibold">
-                    Internal notes
-                  </label>
-                  <input
-                    data-testid="add-booking-notes"
-                    value={createForm.notes}
-                    onChange={(e) =>
-                      setCreateForm({ ...createForm, notes: e.target.value })
-                    }
-                    className="mt-1.5 w-full rounded-xl border-2 border-peach/30 bg-white px-3 py-2 focus:border-lavender-deep outline-none"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-2 border-t border-peach/20">
-                <button
-                  type="button"
-                  onClick={() => setCreateOpen(false)}
-                  className="rounded-full border border-peach/40 bg-white px-5 py-2 text-sm hover:bg-peach/10"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  data-testid="add-booking-submit"
-                  disabled={creating}
-                  className="rounded-full bg-lavender-deep text-ivory px-5 py-2 text-sm hover:bg-lavender-deeper disabled:opacity-60"
-                >
-                  {creating ? "Saving…" : "Save Booking"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+          {activeTab === "stats"      && <StatsTab toast={showToast} />}
+          {activeTab === "bookings"   && <BookingsTab toast={showToast} />}
+          {activeTab === "orders"     && <OrdersTab toast={showToast} />}
+          {activeTab === "categories" && <CategoriesTab toast={showToast} />}
+          {activeTab === "products"   && <ProductsTab toast={showToast} />}
+          {activeTab === "promotions" && <PromotionsTab toast={showToast} />}
+        </main>
+      </div>
     </div>
   );
 }
