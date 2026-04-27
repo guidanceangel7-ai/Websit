@@ -28,6 +28,7 @@ import FAQ from "@/components/FAQ";
 import Contact from "@/components/Contact";
 import BookingDialog from "@/components/BookingDialog";
 import PromoBanner from "@/components/PromoBanner";
+import Testimonials from "@/components/Testimonials";
 
 const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
@@ -48,6 +49,7 @@ export default function HomePage({ scrollToShop, openBooking }) {
   const [bookingOpen, setBookingOpen]       = useState(false);
   const [categories, setCategories]         = useState([]);
   const [services, setServices]             = useState([]);
+  const [testimonials, setTestimonials]     = useState([]);
   const [initialService, setInitialService] = useState(null);
 
   // The URL we were at before the booking dialog was opened.
@@ -60,6 +62,7 @@ export default function HomePage({ scrollToShop, openBooking }) {
   useEffect(() => {
     apiFetch("/categories").then((r) => setCategories(Array.isArray(r) ? r : []));
     apiFetch("/services").then((r)   => setServices(Array.isArray(r) ? r : []));
+    apiFetch("/testimonials").then((r) => setTestimonials(Array.isArray(r) ? r : []));
   }, []);
 
   // ── Deep-link: /book/:serviceId ───────────────────────────────────────────
@@ -153,6 +156,7 @@ export default function HomePage({ scrollToShop, openBooking }) {
           />
         </div>
 
+        <Testimonials items={testimonials} />
         <FAQ />
         <SocialFeed />
         <Contact onBookNow={() => openBookingDialog()} />
