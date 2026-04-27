@@ -7,7 +7,7 @@ import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingCart, Plus, Minus, X, Sparkles, Package,
-  Check, Loader2, ChevronRight, ArrowLeft, Tag,
+  Check, Loader2, ChevronRight, ArrowLeft, Tag, ZoomIn,
 } from "lucide-react";
 import { Overline, StarDivider } from "./Decor";
 import AvailableOffers from "./AvailableOffers";
@@ -178,7 +178,7 @@ function CategoryCard({ cat, onClick }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PRODUCT CARD
 // ════════════════════════════════════════════════════════════════════════════
-function ProductCard({ product, onAdd, cartQty }) {
+function ProductCard({ product, onAdd, cartQty, onOpenDetail }) {
   const src = imgSrc(product);
   const [imgErr, setImgErr] = useState(false);
 
@@ -202,7 +202,12 @@ function ProductCard({ product, onAdd, cartQty }) {
           </span>
         </div>
       )}
-      <div className={`aspect-square overflow-hidden bg-gradient-to-br ${grad(product.id)} flex-shrink-0`}>
+
+      {/* Clickable image area — opens detail modal */}
+      <div
+        onClick={() => onOpenDetail(product.id)}
+        className={`aspect-square overflow-hidden bg-gradient-to-br ${grad(product.id)} flex-shrink-0 cursor-pointer relative`}
+      >
         {src && !imgErr ? (
           <img src={src} alt={product.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" onError={() => setImgErr(true)} />
         ) : (
@@ -211,7 +216,12 @@ function ProductCard({ product, onAdd, cartQty }) {
             <span className="text-white/70 text-[11px] font-medium leading-tight">{product.name}</span>
           </div>
         )}
+        {/* hover overlay hint */}
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
+          <ZoomIn size={28} className="text-white opacity-0 group-hover:opacity-80 transition-opacity duration-300" />
+        </div>
       </div>
+
       <div className="p-4 flex flex-col flex-1">
         {product.tags?.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
@@ -222,17 +232,20 @@ function ProductCard({ product, onAdd, cartQty }) {
             ))}
           </div>
         )}
-        <h3 className="font-display text-[15px] text-[#3A2E5D] font-semibold leading-snug flex-1">{product.name}</h3>
-        {product.blurb && (
-          <p className="mt-1.5 text-xs text-[#3A2E5D]/60 leading-relaxed line-clamp-2">{product.blurb}</p>
-        )}
+        {/* Clicking the name/blurb also opens detail */}
+        <div onClick={() => onOpenDetail(product.id)} className="cursor-pointer flex-1">
+          <h3 className="font-display text-[15px] text-[#3A2E5D] font-semibold leading-snug hover:text-[#6B5B95] transition-colors">{product.name}</h3>
+          {product.blurb && (
+            <p className="mt-1.5 text-xs text-[#3A2E5D]/60 leading-relaxed line-clamp-2">{product.blurb}</p>
+          )}
+        </div>
         <div className="mt-3 flex items-center justify-between gap-2">
           <span className="font-bold text-[#3A2E5D] text-base">
             ₹{(product.price_inr || 0).toLocaleString("en-IN")}
           </span>
           {product.in_stock && (
             <button
-              onClick={() => onAdd(product)}
+              onClick={(e) => { e.stopPropagation(); onAdd(product); }}
               className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-bold transition-all duration-200 ${
                 cartQty > 0
                   ? "bg-[#EBB99A] text-[#3A2E5D]"
@@ -247,6 +260,205 @@ function ProductCard({ product, onAdd, cartQty }) {
     </motion.div>
   );
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// PRODUCT DETAIL MODAL — opens when user clicks a product card
+// ════════════════════════════════════════════════════════════════════════════
+function ProductDetailModal({ productId, onClose, onAdd, cartQty }) {
+  const [product, setProduct] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [activeImg, setActiveImg] = useState(0);
+  const [imgErr, setImgErr] = useState(false);
+
+  useEffect(() => {
+    if (!productId) return;
+    setLoading(true);
+    setActiveImg(0);
+    setImgErr(false);
+    fetch(`${API}/products/${productId}`)
+      .then((r) => r.json())
+      .then((data) => { setProduct(data); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [productId]);
+
+  // close on Escape key
+  useEffect(() => {
+    const handler = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  // Build full image list
+  const images = product
+    ? (product.images?.length ? product.images : product.image_url ? [product.image_url] : [])
+    : [];
+
+  const resolveImg = (url) => {
+    if (!url) return null;
+    if (url.startsWith("http://") || url.startsWith("https://")) return url;
+    if (url.startsWith("data:")) return url;
+    if (url.startsWith("/api/")) return `${process.env.REACT_APP_BACKEND_URL}${url}`;
+    return null;
+  };
+
+  const currentSrc = resolveImg(images[activeImg]);
+
+  return (
+    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center p-0 sm:p-6">
+      {/* backdrop */}
+      <motion.div
+        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+        initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+        onClick={onClose}
+      />
+
+      <motion.div
+        initial={{ opacity: 0, y: 60 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: 60 }}
+        transition={{ type: "spring", damping: 28 }}
+        className="relative bg-[#FBF4E8] rounded-t-3xl sm:rounded-3xl w-full sm:max-w-2xl max-h-[92vh] overflow-y-auto shadow-2xl"
+      >
+        {/* Close button */}
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 z-10 w-9 h-9 rounded-full bg-white/80 backdrop-blur flex items-center justify-center shadow-sm hover:bg-white transition"
+        >
+          <X size={16} className="text-[#3A2E5D]" />
+        </button>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-24">
+            <Loader2 size={32} className="animate-spin text-[#6B5B95]" />
+          </div>
+        ) : !product ? (
+          <div className="flex flex-col items-center justify-center py-24 text-[#9B8AC4]">
+            <Sparkles size={40} className="mb-3 opacity-40" />
+            <p className="text-sm">Product not found</p>
+          </div>
+        ) : (
+          <div className="flex flex-col sm:flex-row">
+            {/* ── Image panel ── */}
+            <div className="sm:w-[48%] flex-shrink-0 bg-gradient-to-br from-[#F0EBF9] to-[#FBF4E8] rounded-t-3xl sm:rounded-l-3xl sm:rounded-tr-none overflow-hidden">
+              {/* Main image */}
+              <div className={`aspect-square bg-gradient-to-br ${grad(product.id)} relative`}>
+                {currentSrc && !imgErr ? (
+                  <img
+                    src={currentSrc}
+                    alt={product.name}
+                    className="w-full h-full object-cover"
+                    onError={() => setImgErr(true)}
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Sparkles size={48} className="text-white/50" />
+                  </div>
+                )}
+                {!product.in_stock && (
+                  <div className="absolute inset-0 bg-white/70 backdrop-blur-[2px] flex items-center justify-center">
+                    <span className="bg-[#3A2E5D] text-white text-xs font-bold tracking-widest uppercase px-4 py-2 rounded-full">
+                      Out of Stock
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Thumbnail strip */}
+              {images.length > 1 && (
+                <div className="flex gap-2 p-3 overflow-x-auto">
+                  {images.map((img, i) => {
+                    const src = resolveImg(img);
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => { setActiveImg(i); setImgErr(false); }}
+                        className={`flex-shrink-0 w-14 h-14 rounded-xl overflow-hidden border-2 transition ${
+                          i === activeImg ? "border-[#6B5B95]" : "border-transparent opacity-60 hover:opacity-100"
+                        }`}
+                      >
+                        {src ? (
+                          <img src={src} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className={`w-full h-full bg-gradient-to-br ${grad(product.id)}`} />
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* ── Details panel ── */}
+            <div className="flex-1 p-6 flex flex-col gap-4">
+              {/* Badge */}
+              {product.badge && (
+                <span className="self-start bg-[#EBB99A] text-[#3A2E5D] text-[10px] font-bold tracking-widest uppercase px-3 py-1 rounded-full">
+                  {product.badge}
+                </span>
+              )}
+
+              {/* Name */}
+              <h2 className="font-display text-2xl sm:text-3xl text-[#3A2E5D] leading-tight">
+                {product.name}
+              </h2>
+
+              {/* Tags */}
+              {product.tags?.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {product.tags.map((t) => (
+                    <span key={t} className="text-[10px] tracking-wider uppercase text-[#6B5B95] bg-[#F0EBF9] rounded-full px-2.5 py-1 font-semibold">
+                      #{t}
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Description / blurb */}
+              {product.blurb && (
+                <p className="text-[#3A2E5D]/75 text-sm leading-relaxed">{product.blurb}</p>
+              )}
+
+              {/* Price */}
+              <div className="flex items-baseline gap-2 mt-auto">
+                <span className="font-display text-3xl font-bold text-[#3A2E5D]">
+                  ₹{(product.price_inr || 0).toLocaleString("en-IN")}
+                </span>
+                <span className="text-xs text-[#9B8AC4]">incl. taxes</span>
+              </div>
+
+              {/* Add to Cart */}
+              {product.in_stock ? (
+                <button
+                  onClick={() => { onAdd(product); onClose(); }}
+                  className={`w-full py-3.5 rounded-2xl font-bold text-sm flex items-center justify-center gap-2 transition ${
+                    cartQty > 0
+                      ? "bg-[#EBB99A] text-[#3A2E5D] hover:bg-[#e0a882]"
+                      : "bg-[#6B5B95] text-[#FBF4E8] hover:bg-[#5a4a84] shadow-[0_8px_24px_rgba(107,91,149,0.35)]"
+                  }`}
+                >
+                  {cartQty > 0 ? (
+                    <><Check size={16} /> In Bag ({cartQty}) — Add More</>
+                  ) : (
+                    <><ShoppingCart size={16} /> Add to Bag</>
+                  )}
+                </button>
+              ) : (
+                <div className="w-full py-3.5 rounded-2xl bg-gray-100 text-gray-400 text-sm font-bold text-center">
+                  Currently Out of Stock
+                </div>
+              )}
+
+              <p className="text-[10px] text-[#9B8AC4] text-center">
+                🔒 Secure checkout · Ships pan-India · 5–7 business days
+              </p>
+            </div>
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
 
 // ════════════════════════════════════════════════════════════════════════════
 // CART SIDEBAR
@@ -607,6 +819,7 @@ export default function Shop() {
   const [cartOpen, setCartOpen]     = useState(false);
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [orderDone, setOrderDone]   = useState(false);
+  const [detailProductId, setDetailProductId] = useState(null);
 
   const { show: showToast, el: toastEl } = useToast();
 
@@ -792,7 +1005,7 @@ export default function Shop() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
                 {(selectedCategory.products || []).map((product) => (
-                  <ProductCard key={product.id} product={product} onAdd={addToCart} cartQty={cartQtyFor(product.id)} />
+                  <ProductCard key={product.id} product={product} onAdd={addToCart} cartQty={cartQtyFor(product.id)} onOpenDetail={setDetailProductId} />
                 ))}
               </div>
             )}
@@ -851,13 +1064,25 @@ export default function Shop() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
                 {tagProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} onAdd={addToCart} cartQty={cartQtyFor(product.id)} />
+                  <ProductCard key={product.id} product={product} onAdd={addToCart} cartQty={cartQtyFor(product.id)} onOpenDetail={setDetailProductId} />
                 ))}
               </div>
             )}
           </>
         )}
       </div>
+
+      {/* ── Product detail modal ───────────────────────────────────────────── */}
+      <AnimatePresence>
+        {detailProductId && (
+          <ProductDetailModal
+            productId={detailProductId}
+            onClose={() => setDetailProductId(null)}
+            onAdd={addToCart}
+            cartQty={cartQtyFor(detailProductId)}
+          />
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {cartOpen && (
