@@ -2,6 +2,19 @@ import React from "react";
 import { BRAND } from "../lib/brand";
 import { Instagram, MessageCircle, Mail, Heart } from "lucide-react";
 
+const QUICK_LINKS = [
+  { label: "About",        id: "about"        },
+  { label: "Services",     id: "services"     },
+  { label: "Testimonials", id: "testimonials" },
+  { label: "FAQ",          id: "faq"          },
+  { label: "Contact",      id: "contact"      },
+];
+
+function scrollTo(id) {
+  const el = document.getElementById(id);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
 export default function Footer() {
   return (
     <footer
@@ -34,33 +47,23 @@ export default function Footer() {
         </div>
 
         <div>
-          <div className="font-display text-base text-ink-plum mb-4">
-            Quick Links
-          </div>
+          <div className="font-display text-base text-ink-plum mb-4">Quick Links</div>
           <ul className="space-y-2 text-sm">
-            {[
-              ["About", "#about"],
-              ["Services", "#services"],
-              ["Testimonials", "#testimonials"],
-              ["FAQ", "#faq"],
-              ["Contact", "#contact"],
-            ].map(([label, href]) => (
+            {QUICK_LINKS.map(({ label, id }) => (
               <li key={label}>
-                <a
-                  href={href}
-                  className="text-ink-plum/70 hover:text-lavender-deep transition"
+                <button
+                  onClick={() => scrollTo(id)}
+                  className="text-ink-plum/70 hover:text-lavender-deep transition text-left"
                 >
                   {label}
-                </a>
+                </button>
               </li>
             ))}
           </ul>
         </div>
 
         <div>
-          <div className="font-display text-base text-ink-plum mb-4">
-            Reach Out
-          </div>
+          <div className="font-display text-base text-ink-plum mb-4">Reach Out</div>
           <div className="flex flex-col gap-3 text-sm">
             <a
               href={`https://wa.me/${BRAND.whatsapp}`}
@@ -89,12 +92,9 @@ export default function Footer() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 sm:px-12 mt-12 pt-6 border-t border-peach/20 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-ink-plum/60">
-        <div>
-          © {new Date().getFullYear()} Guidance Angel · All rights reserved
-        </div>
+        <div>© {new Date().getFullYear()} Guidance Angel · All rights reserved</div>
         <div className="inline-flex items-center gap-1.5">
-          Crafted with <Heart size={12} className="text-peach fill-peach" /> for
-          souls in transition
+          Crafted with <Heart size={12} className="text-peach fill-peach" /> for souls in transition
         </div>
       </div>
     </footer>
