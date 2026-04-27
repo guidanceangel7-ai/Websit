@@ -9,7 +9,7 @@ export default function Hero({ onBookNow }) {
     <section
       id="top"
       data-testid="hero-section"
-      className="relative pt-28 pb-20 sm:pt-32 sm:pb-28 aurora-bg overflow-hidden"
+      className="relative pt-24 sm:pt-32 pb-14 sm:pb-28 aurora-bg overflow-hidden"
       style={{ minHeight: "100dvh" }}
     >
       <SparkleField count={14} />
@@ -26,7 +26,7 @@ export default function Hero({ onBookNow }) {
       />
       <div className="absolute inset-0 -z-10 bg-ivory/70" />
 
-      <div className="max-w-7xl mx-auto px-6 sm:px-12 grid lg:grid-cols-12 gap-10 items-center relative">
+      <div className="max-w-7xl mx-auto px-5 sm:px-10 lg:px-12 grid lg:grid-cols-12 gap-10 lg:gap-12 items-center relative">
         <div className="lg:col-span-7">
           <motion.div
             initial={{ opacity: 0, y: 12 }}
@@ -40,7 +40,7 @@ export default function Hero({ onBookNow }) {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.05 }}
-            className="font-display mt-5 text-5xl sm:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-ink-plum"
+            className="font-display mt-5 text-[2.7rem] min-[380px]:text-5xl sm:text-6xl lg:text-7xl leading-[1.05] tracking-tight text-ink-plum"
           >
             Guiding You to{" "}
             <span className="italic text-lavender-deep">Light</span>
@@ -68,12 +68,12 @@ export default function Hero({ onBookNow }) {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.25 }}
-            className="mt-9 flex flex-wrap items-center gap-4"
+            className="mt-8 sm:mt-9 flex flex-col min-[420px]:flex-row flex-wrap items-stretch min-[420px]:items-center gap-3 sm:gap-4"
           >
             <button
               data-testid="hero-book-now"
               onClick={onBookNow}
-              className="group inline-flex items-center gap-2 bg-lavender-deep text-ivory rounded-full px-7 py-3.5 text-sm sm:text-base font-medium hover:bg-lavender-deeper transition shadow-[0_8px_28px_rgba(107,91,149,0.3)] hover:scale-[1.03]"
+              className="group inline-flex justify-center items-center gap-2 bg-lavender-deep text-ivory rounded-full px-6 sm:px-7 py-3.5 text-sm sm:text-base font-medium hover:bg-lavender-deeper transition shadow-[0_8px_28px_rgba(107,91,149,0.3)] hover:scale-[1.03] w-full min-[420px]:w-auto"
             >
               Book Your Reading
               <ArrowRight
@@ -86,7 +86,7 @@ export default function Hero({ onBookNow }) {
               href={`https://wa.me/${BRAND.whatsapp}?text=${encodeURIComponent("Hi Jenika, I'd love to know more about your readings.")}`}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 bg-white/80 backdrop-blur border border-peach/40 text-lavender-deep rounded-full px-6 py-3.5 text-sm sm:text-base font-medium hover:bg-peach/10 transition"
+              className="inline-flex justify-center items-center gap-2 bg-white/80 backdrop-blur border border-peach/40 text-lavender-deep rounded-full px-6 py-3.5 text-sm sm:text-base font-medium hover:bg-peach/10 transition w-full min-[420px]:w-auto"
             >
               <MessageCircle size={18} />
               Chat on WhatsApp
@@ -98,18 +98,18 @@ export default function Hero({ onBookNow }) {
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.35 }}
-            className="mt-12 grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-2xl"
+            className="mt-10 sm:mt-12 grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4 max-w-2xl"
           >
             {TRUST_STATS.map((s) => (
               <div
                 key={s.label}
                 data-testid={`stat-${s.label.replace(/\s+/g, "-").toLowerCase()}`}
-                className="px-5 py-4 rounded-2xl bg-white/70 backdrop-blur border border-peach/25"
+                className="px-3 sm:px-5 py-3 sm:py-4 rounded-2xl bg-white/70 backdrop-blur border border-peach/25 min-w-0"
               >
-                <div className="font-display text-2xl text-lavender-deep">
+                <div className="font-display text-xl sm:text-2xl text-lavender-deep">
                   {s.value}
                 </div>
-                <div className="text-[11px] tracking-[0.18em] uppercase text-ink-plum/70 mt-1">
+                <div className="text-[9px] sm:text-[11px] tracking-[0.12em] sm:tracking-[0.18em] uppercase text-ink-plum/70 mt-1 leading-tight">
                   {s.label}
                 </div>
               </div>
