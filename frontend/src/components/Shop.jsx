@@ -3,7 +3,8 @@
  * Uses ONLY: React, framer-motion, lucide-react (all already installed)
  * No axios, no sonner — pure fetch API
  */
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ShoppingCart, Plus, Minus, X, Sparkles, Package,
@@ -926,7 +927,9 @@ function CategoryView({ cat, cartCount, onBack, onOpenCart, addToCart, cartQtyFo
 // ════════════════════════════════════════════════════════════════════════════
 // MAIN SHOP COMPONENT
 // ════════════════════════════════════════════════════════════════════════════
-export default function Shop() {
+export default function Shop({ initialCategoryId, initialProductId }) {
+  const navigate = useNavigate();
+
   const [categories, setCategories] = useState([]);
   const [allTags, setAllTags]       = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -938,6 +941,9 @@ export default function Shop() {
   const [checkoutOpen, setCheckoutOpen] = useState(false);
   const [orderDone, setOrderDone]   = useState(false);
   const [detailProductId, setDetailProductId] = useState(null);
+
+  // Track if we've already applied the initial URL state (only once per mount)
+  const initialApplied = useRef(false);
 
   const { show: showToast, el: toastEl } = useToast();
 
@@ -954,6 +960,20 @@ export default function Shop() {
     }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
   }, []);
+
+  // Apply deep-link initial state once categories are loaded
+  useEffect(() => {
+    if (initialApplied.current || loading || !categories.length) return;
+    initialApplied.current = true;
+
+    if (initialProductId) {
+      // Open product modal right away (ProductDetailModal fetches full product itself)
+      setDetailProductId(initialProductId);
+    } else if (initialCategoryId) {
+      const cat = categories.find((c) => c.id === initialCategoryId);
+      if (cat) { setSelectedCategory(cat); setView("category"); }
+    }
+  }, [categories, loading, initialCategoryId, initialProductId]);
 
   const allProducts = useMemo(
     () => categories.flatMap((c) => (c.products || []).map((p) => ({ ...p, _catName: c.name }))),
@@ -997,9 +1017,42 @@ export default function Shop() {
     setOrderDone(true); setTimeout(() => setOrderDone(false), 6000);
   };
 
-  const openCategory = (cat) => { setSelectedCategory(cat); setView("category"); };
-  const openTag      = (tag) => { setActiveTag(tag); setView("tag"); };
-  const goHome       = ()    => { setView("home"); setSelectedCategory(null); setActiveTag(null); };
+  // Navigation helpers — update both state AND browser URL
+  const openCategory = useCallback((cat) => {
+    setSelectedCategory(cat);
+    setView("category");
+    navigate(`/shop/${cat.id}`, { replace: false });
+  }, [navigate]);
+
+  const openTag = useCallback((tag) => {
+    setActiveTag(tag);
+    setView("tag");
+    // Tags don't get their own shareable URL (they're a filter, not a page)
+  }, []);
+
+  const goHome = useCallback(() => {
+    setView("home");
+    setSelectedCategory(null);
+    setActiveTag(null);
+    navigate("/shop", { replace: false });
+  }, [navigate]);
+
+  // Open product detail — updates URL so sharing works
+  const openDetail = useCallback((productId) => {
+    setDetailProductId(productId);
+    navigate(`/product/${productId}`, { replace: false });
+  }, [navigate]);
+
+  // Close product detail — go back in history if possible, else to /shop
+  const closeDetail = useCallback(() => {
+    setDetailProductId(null);
+    // If there's a history entry to go back to, go back; otherwise land on /shop
+    if (window.history.length > 1) {
+      navigate(-1);
+    } else {
+      navigate("/shop", { replace: true });
+    }
+  }, [navigate]);
 
   return (
     <section id="shop" className="relative py-20 sm:py-28 bg-gradient-to-b from-[#FBF4E8] via-[#F5EEF8] to-[#FBF4E8] min-h-screen">
@@ -1093,7 +1146,7 @@ export default function Shop() {
             onOpenCart={() => setCartOpen(true)}
             addToCart={addToCart}
             cartQtyFor={cartQtyFor}
-            onOpenDetail={setDetailProductId}
+            onOpenDetail={openDetail}
           />
         )}
 
@@ -1149,7 +1202,7 @@ export default function Shop() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
                 {tagProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} onAdd={addToCart} cartQty={cartQtyFor(product.id)} onOpenDetail={setDetailProductId} />
+                  <ProductCard key={product.id} product={product} onAdd={addToCart} cartQty={cartQtyFor(product.id)} onOpenDetail={openDetail} />
                 ))}
               </div>
             )}
@@ -1162,7 +1215,7 @@ export default function Shop() {
         {detailProductId && (
           <ProductDetailModal
             productId={detailProductId}
-            onClose={() => setDetailProductId(null)}
+            onClose={closeDetail}
             onAdd={addToCart}
             cartQty={cartQtyFor(detailProductId)}
           />
