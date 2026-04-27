@@ -14,7 +14,6 @@ import {
   Clock,
   RefreshCw,
   LogOut,
-  ChevronRight,
   Loader2,
   AlertCircle,
   CheckCircle2,
