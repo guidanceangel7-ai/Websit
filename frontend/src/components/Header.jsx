@@ -146,7 +146,7 @@ export default function Header({ onBookNow }) {
                   <button
                     key={item.label}
                     data-testid={`mobile-nav-${item.label.toLowerCase()}`}
-                    onClick={() => { setMobileOpen(false); scrollTo(item.id); }}
+                    onClick={() => { setMobileOpen(false); setTimeout(() => scrollTo(item.id), 350); }}
                     className="font-display text-2xl text-ink-plum text-left"
                   >
                     {item.label}
