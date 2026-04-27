@@ -79,7 +79,7 @@ function Toast({ message, type, onDone }) {
       initial={{ opacity: 0, y: -16 }}
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -16 }}
-      className={`fixed top-6 left-1/2 -translate-x-1/2 z-[100] px-6 py-3 rounded-full shadow-xl text-sm font-semibold flex items-center gap-2 whitespace-nowrap pointer-events-none ${
+      className={`fixed top-4 left-1/2 -translate-x-1/2 z-[100] px-4 sm:px-6 py-3 rounded-2xl sm:rounded-full shadow-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 pointer-events-none w-[calc(100vw-2rem)] sm:w-auto sm:max-w-md text-center ${
         type === "error"
           ? "bg-red-600 text-white"
           : "bg-[#6B5B95] text-[#FBF4E8]"
@@ -239,14 +239,14 @@ function ProductCard({ product, onAdd, cartQty, onOpenDetail }) {
             <p className="mt-1.5 text-xs text-[#3A2E5D]/60 leading-relaxed line-clamp-2">{product.blurb}</p>
           )}
         </div>
-        <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="mt-3 flex flex-col min-[430px]:flex-row min-[430px]:items-center min-[430px]:justify-between gap-2">
           <span className="font-bold text-[#3A2E5D] text-base">
             ₹{(product.price_inr || 0).toLocaleString("en-IN")}
           </span>
           {product.in_stock && (
             <button
               onClick={(e) => { e.stopPropagation(); onAdd(product); }}
-              className={`inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[11px] font-bold transition-all duration-200 ${
+              className={`inline-flex items-center justify-center gap-1.5 rounded-full px-3.5 py-2 text-[11px] font-bold transition-all duration-200 w-full min-[430px]:w-auto ${
                 cartQty > 0
                   ? "bg-[#EBB99A] text-[#3A2E5D]"
                   : "bg-[#6B5B95] text-[#FBF4E8] hover:bg-[#5a4a84] shadow-[0_4px_14px_rgba(107,91,149,0.35)]"
@@ -473,7 +473,7 @@ function CartSidebar({ cart, onAdd, onRemove, onClear, onCheckout, onClose }) {
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
         transition={{ type: "spring", damping: 30, stiffness: 300 }}
-        className="relative bg-[#FBF4E8] w-full max-w-[360px] h-full flex flex-col shadow-2xl"
+        className="relative bg-[#FBF4E8] w-full sm:max-w-[390px] h-full flex flex-col shadow-2xl"
       >
         <div className="flex-shrink-0 bg-[#6B5B95] text-[#FBF4E8] px-5 py-4 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -754,7 +754,7 @@ function CheckoutDialog({ cart, onClose, onSuccess, showToast }) {
             <p className="text-[10px] uppercase tracking-[0.25em] text-[#9B8AC4] font-bold">Shipping Address</p>
             <input className={inp} placeholder="Flat / house, street, area *" value={form.addr1} onChange={set("addr1")} />
             <input className={inp} placeholder="Landmark / locality (optional)" value={form.addr2} onChange={set("addr2")} />
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
               <input className={inp} placeholder="City *" value={form.city} onChange={set("city")} />
               <input className={inp} placeholder="State *" value={form.state} onChange={set("state")} />
             </div>
@@ -792,7 +792,7 @@ function FloatingCart({ count, onClick }) {
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0, opacity: 0 }}
           onClick={onClick}
-          className="fixed bottom-6 right-6 z-40 bg-[#6B5B95] text-[#FBF4E8] rounded-full w-14 h-14 flex items-center justify-center shadow-[0_8px_28px_rgba(107,91,149,0.55)] hover:bg-[#5a4a84] transition"
+          className="fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 sm:right-6 z-40 bg-[#6B5B95] text-[#FBF4E8] rounded-full w-14 h-14 flex items-center justify-center shadow-[0_8px_28px_rgba(107,91,149,0.55)] hover:bg-[#5a4a84] transition"
           aria-label={`Open cart (${count} items)`}
         >
           <ShoppingCart size={22} />
@@ -832,7 +832,7 @@ function CategoryView({ cat, cartCount, onBack, onOpenCart, addToCart, cartQtyFo
 
   return (
     <>
-      <div className="flex items-center justify-between mb-8">
+      <div className="flex flex-col min-[420px]:flex-row min-[420px]:items-center justify-between gap-3 mb-8">
         <button onClick={onBack} className="flex items-center gap-2 text-[#6B5B95] font-semibold text-sm hover:gap-3 transition-all duration-200">
           <ArrowLeft size={16} /> Back to Shop
         </button>
@@ -913,7 +913,7 @@ function CategoryView({ cat, cartCount, onBack, onOpenCart, addToCart, cartQtyFo
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+        <div className="grid grid-cols-1 min-[430px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
           {visibleProducts.map((product) => (
             <ProductCard key={product.id} product={product} onAdd={addToCart} cartQty={cartQtyFor(product.id)} onOpenDetail={onOpenDetail} />
           ))}
@@ -980,7 +980,10 @@ export default function Shop({ initialCategoryId, initialProductId }) {
       const path   = window.location.pathname;
       const search = window.location.search;
 
-      if (path === "/" || path === "/shop" || path === "") {
+      if (path === "/shop" && search.includes("tag=")) {
+        const tag = new URLSearchParams(search).get("tag");
+        if (tag) { setActiveTag(tag); setView("tag"); setDetailProductId(null); }
+      } else if (path === "/" || path === "/shop" || path === "") {
         setView("home");
         setSelectedCategory(null);
         setActiveTag(null);
@@ -997,9 +1000,6 @@ export default function Shop({ initialCategoryId, initialProductId }) {
           setView("category");
           setDetailProductId(null);
         }
-      } else if (path === "/shop" && search.includes("tag=")) {
-        const tag = new URLSearchParams(search).get("tag");
-        if (tag) { setActiveTag(tag); setView("tag"); setDetailProductId(null); }
       }
     }
     window.addEventListener("popstate", handlePop);
@@ -1105,7 +1105,7 @@ export default function Shop({ initialCategoryId, initialProductId }) {
         {orderDone && (
           <motion.div
             initial={{ opacity: 0, y: -24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -24 }}
-            className="fixed top-6 left-1/2 -translate-x-1/2 z-50 bg-[#6B5B95] text-[#FBF4E8] px-6 py-3 rounded-full shadow-xl text-sm font-semibold flex items-center gap-2 whitespace-nowrap"
+            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-[#6B5B95] text-[#FBF4E8] px-4 sm:px-6 py-3 rounded-2xl sm:rounded-full shadow-xl text-xs sm:text-sm font-semibold flex items-center justify-center gap-2 w-[calc(100vw-2rem)] sm:w-auto text-center"
           >
             <Check size={15} /> Order confirmed! We'll ship in 5–7 days 🌟
           </motion.div>
@@ -1240,7 +1240,7 @@ export default function Shop({ initialCategoryId, initialProductId }) {
                 </button>
               </div>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
+              <div className="grid grid-cols-1 min-[430px]:grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
                 {tagProducts.map((product) => (
                   <ProductCard key={product.id} product={product} onAdd={addToCart} cartQty={cartQtyFor(product.id)} onOpenDetail={openDetail} />
                 ))}
