@@ -778,7 +778,7 @@ function CategoriesTab({ toast }) {
 // ════════════════════════════════════════════════════════════════════════════
 // PRODUCTS TAB — with variants panel + image upload with crop
 // ════════════════════════════════════════════════════════════════════════════
-const EMPTY_PRODUCT = { id:"", name:"", blurb:"", price_inr:"", product_category_id:"", badge:"", in_stock:true, tags:"" };
+const EMPTY_PRODUCT = { id:"", name:"", blurb:"", price_inr:"", product_category_id:"", badge:"", shop_url:"", in_stock:true, order:"100", tags:"" };
 
 function ProductsTab({ toast }) {
   const [products, setProducts]   = useState([]);
@@ -790,6 +790,84 @@ function ProductsTab({ toast }) {
   const [cropSrc, setCropSrc]     = useState(null);
   const [uploadingFor, setUploadingFor] = useState(null);
   const imgInputRef = useRef();
+
+  // ── Edit product state ──────────────────────────────────────────────────
+  const [editProduct, setEditProduct]   = useState(null); // product being edited
+  const [editForm, setEditForm]         = useState(null); // editable field values
+  const [editImages, setEditImages]     = useState([]);   // full image list for that product
+  const [editSaving, setEditSaving]     = useState(false);
+  const [editImgLoading, setEditImgLoading] = useState(false);
+  const editImgRef = useRef();
+
+  const openEdit = async (p) => {
+    setEditProduct(p);
+    setEditForm({
+      id: p.id,
+      name: p.name || "",
+      blurb: p.blurb || "",
+      price_inr: String(p.price_inr || ""),
+      product_category_id: p.product_category_id || "",
+      badge: p.badge || "",
+      shop_url: p.shop_url || "",
+      in_stock: p.in_stock !== false,
+      order: String(p.order || 100),
+      tags: (p.tags || []).join(", "),
+    });
+    // Load full product (with images) from public endpoint
+    try {
+      const full = await adminFetch(`/products/${p.id}`).catch(() =>
+        fetch(`${API}/products/${p.id}`).then((r) => r.json()).catch(() => ({}))
+      );
+      const imgs = full.images || (full.image_url ? [full.image_url] : []);
+      setEditImages(imgs.map((url) =>
+        url.startsWith("/api/") ? `${BACKEND}${url}` : url
+      ));
+    } catch { setEditImages([]); }
+  };
+
+  const closeEdit = () => { setEditProduct(null); setEditForm(null); setEditImages([]); };
+
+  const saveEdit = async (e) => {
+    e.preventDefault();
+    if (!editForm) return;
+    setEditSaving(true);
+    try {
+      await adminFetch(`/admin/products/${editProduct.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          ...editForm,
+          price_inr: parseInt(editForm.price_inr, 10) || 0,
+          order: parseInt(editForm.order, 10) || 100,
+          tags: editForm.tags.split(",").map((t) => t.trim()).filter(Boolean),
+        }),
+      });
+      toast("Product saved"); load(); closeEdit();
+    } catch (err) { toast(err.message, "error"); }
+    finally { setEditSaving(false); }
+  };
+
+  const handleEditImgFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file || !editProduct) return;
+    if (file.size > 8 * 1024 * 1024) { toast("Image must be under 8 MB", "error"); e.target.value = ""; return; }
+    const b64 = await fileToBase64(file);
+    e.target.value = "";
+    // Set as uploadingFor then open crop dialog
+    setUploadingFor(editProduct.id);
+    setCropSrc(b64);
+  };
+
+  const deleteEditImage = async (idx) => {
+    if (!editProduct) return;
+    if (!window.confirm("Remove this image?")) return;
+    setEditImgLoading(true);
+    try {
+      await adminFetch(`/admin/products/${editProduct.id}/image/${idx}`, { method: "DELETE" });
+      setEditImages((prev) => prev.filter((_, i) => i !== idx));
+      toast("Image removed");
+    } catch (err) { toast(err.message, "error"); }
+    finally { setEditImgLoading(false); }
+  };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -842,10 +920,20 @@ function ProductsTab({ toast }) {
 
   const onCropped = async (b64) => {
     setCropSrc(null);
-    if (!uploadingFor) return;
+    const pid = uploadingFor;
+    if (!pid) return;
     try {
-      await adminFetch(`/admin/products/${uploadingFor}/images`, { method:"POST", body:JSON.stringify({ image_data: b64 }) });
-      toast("Image uploaded"); load();
+      // Correct endpoint: /admin/products/{pid}/image  (singular, not /images)
+      const result = await adminFetch(`/admin/products/${pid}/image`, { method:"POST", body:JSON.stringify({ image_data: b64 }) });
+      toast("Image uploaded");
+      load();
+      // If we were uploading from inside the edit modal, refresh its image list too
+      if (editProduct && editProduct.id === pid) {
+        const newImgs = (result.images || []).map((url) =>
+          url.startsWith("/api/") ? `${BACKEND}${url}` : url
+        );
+        if (newImgs.length) setEditImages(newImgs);
+      }
     } catch (e) { toast(e.message,"error"); }
     setUploadingFor(null);
   };
@@ -865,6 +953,110 @@ function ProductsTab({ toast }) {
         />
       )}
       <input ref={imgInputRef} type="file" accept="image/*" className="hidden" onChange={handleFileSelect}/>
+      <input ref={editImgRef} type="file" accept="image/*" className="hidden" onChange={handleEditImgFile}/>
+
+      {/* ── PRODUCT EDIT MODAL ───────────────────────────────────────────── */}
+      {editProduct && editForm && (
+        <div className="fixed inset-0 z-[200] bg-black/50 flex items-center justify-center p-4" onClick={(e)=>{ if(e.target===e.currentTarget) closeEdit(); }}>
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-[#E6DDF1] sticky top-0 bg-white z-10">
+              <p className="font-semibold text-[#3A2E5D] flex items-center gap-2"><Edit2 size={15}/> Edit Product</p>
+              <button onClick={closeEdit} className="p-2 rounded-xl hover:bg-[#F5EEF8] text-[#9B8AC4]"><X size={16}/></button>
+            </div>
+            <form onSubmit={saveEdit} className="p-6 space-y-5">
+              {/* Image gallery */}
+              <div>
+                <p className="text-xs font-bold text-[#3A2E5D] uppercase tracking-wider mb-2">Images ({editImages.length}/5)</p>
+                <div className="flex flex-wrap gap-3">
+                  {editImages.map((url, i) => (
+                    <div key={i} className="relative group">
+                      <img src={url} alt={`img-${i}`}
+                        className="w-20 h-20 object-cover rounded-xl border-2 border-[#C8B6E2]"
+                        onError={(e) => { e.target.src = ""; e.target.style.display = "none"; }}/>
+                      {i === 0 && <span className="absolute top-1 left-1 text-[8px] bg-[#6B5B95] text-white px-1.5 py-0.5 rounded-full font-bold">Primary</span>}
+                      <button type="button"
+                        onClick={() => deleteEditImage(i)}
+                        disabled={editImgLoading}
+                        className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                        <X size={10}/>
+                      </button>
+                    </div>
+                  ))}
+                  {editImages.length < 5 && (
+                    <button type="button"
+                      onClick={() => { setUploadingFor(editProduct.id); editImgRef.current?.click(); }}
+                      className="w-20 h-20 rounded-xl border-2 border-dashed border-[#C8B6E2] flex flex-col items-center justify-center gap-1 text-[#9B8AC4] hover:border-[#6B5B95] hover:text-[#6B5B95] transition">
+                      <ImagePlus size={18}/>
+                      <span className="text-[10px] font-medium">Add</span>
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-[#9B8AC4] mt-1">First image is the primary thumbnail. Max 5 images. Hover to remove.</p>
+              </div>
+
+              {/* Fields */}
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-[#3A2E5D] uppercase tracking-wider block mb-1">Product ID</label>
+                  <input className={`${inputCls} opacity-60`} value={editForm.id} disabled/>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[#3A2E5D] uppercase tracking-wider block mb-1">Name *</label>
+                  <input className={inputCls} value={editForm.name} onChange={(e)=>setEditForm((f)=>({...f,name:e.target.value}))} required/>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-[#3A2E5D] uppercase tracking-wider block mb-1">Description / Blurb</label>
+                  <textarea className={`${inputCls} resize-none`} rows={2} value={editForm.blurb} onChange={(e)=>setEditForm((f)=>({...f,blurb:e.target.value}))}/>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[#3A2E5D] uppercase tracking-wider block mb-1">Price (₹) *</label>
+                  <input className={inputCls} type="number" value={editForm.price_inr} onChange={(e)=>setEditForm((f)=>({...f,price_inr:e.target.value}))} required/>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[#3A2E5D] uppercase tracking-wider block mb-1">Category</label>
+                  <select className={inputCls} value={editForm.product_category_id} onChange={(e)=>setEditForm((f)=>({...f,product_category_id:e.target.value}))}>
+                    <option value="">No category</option>
+                    {categories.map((c)=><option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[#3A2E5D] uppercase tracking-wider block mb-1">Badge (e.g. Bestseller)</label>
+                  <input className={inputCls} value={editForm.badge} onChange={(e)=>setEditForm((f)=>({...f,badge:e.target.value}))} placeholder="Optional"/>
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-[#3A2E5D] uppercase tracking-wider block mb-1">Display Order</label>
+                  <input className={inputCls} type="number" value={editForm.order} onChange={(e)=>setEditForm((f)=>({...f,order:e.target.value}))}/>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-[#3A2E5D] uppercase tracking-wider block mb-1">Tags (comma separated)</label>
+                  <input className={inputCls} value={editForm.tags} onChange={(e)=>setEditForm((f)=>({...f,tags:e.target.value}))} placeholder="love, money, protection"/>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="text-xs font-bold text-[#3A2E5D] uppercase tracking-wider block mb-1">Shop URL (optional external link)</label>
+                  <input className={inputCls} value={editForm.shop_url} onChange={(e)=>setEditForm((f)=>({...f,shop_url:e.target.value}))} placeholder="https://..."/>
+                </div>
+                <div className="sm:col-span-2 flex items-center gap-3">
+                  <label className="flex items-center gap-2 text-sm text-[#3A2E5D] cursor-pointer">
+                    <input type="checkbox" checked={editForm.in_stock} onChange={(e)=>setEditForm((f)=>({...f,in_stock:e.target.checked}))} className="w-4 h-4 accent-[#6B5B95]"/>
+                    In Stock
+                  </label>
+                </div>
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button type="submit" disabled={editSaving}
+                  className="flex-1 py-2.5 rounded-xl bg-[#6B5B95] text-white text-sm font-semibold hover:bg-[#5a4a84] disabled:opacity-60 transition flex items-center justify-center gap-2">
+                  {editSaving ? <Loader2 size={14} className="animate-spin"/> : <Check size={14}/>} Save Changes
+                </button>
+                <button type="button" onClick={closeEdit}
+                  className="px-5 py-2.5 rounded-xl bg-white border border-[#C8B6E2] text-[#3A2E5D] text-sm hover:bg-[#E6DDF1] transition">
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       <div className="flex items-center justify-between mb-5">
         <h3 className="font-display text-xl text-[#3A2E5D]">Products ({products.length})</h3>
@@ -948,6 +1140,11 @@ function ProductsTab({ toast }) {
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
+                        <button title="Edit product"
+                          onClick={() => openEdit(p)}
+                          className="p-1.5 rounded-lg text-[#6B5B95] hover:bg-[#E6DDF1] transition">
+                          <Edit2 size={13}/>
+                        </button>
                         <button title="Upload &amp; crop image"
                           onClick={() => { setUploadingFor(p.id); imgInputRef.current?.click(); }}
                           className="p-1.5 rounded-lg text-[#9B8AC4] hover:bg-[#E6DDF1] transition">
@@ -1106,112 +1303,216 @@ function PromotionsTab({ toast }) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SCHEDULE TAB — manage blocked dates & working hours
+// SCHEDULE TAB — day-based working hours (with breaks) + blocked dates
+// API: GET/PUT /admin/settings  &  GET/POST/DELETE /admin/blocked-dates
 // ════════════════════════════════════════════════════════════════════════════
-const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
-const DAYS   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+const MONTHS   = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+const CAL_DAYS = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+
+// Display order: Mon→Sun. key = weekday index matching Python's date.weekday() + offset
+const WEEK_DAYS = [
+  { key:"1", label:"Monday" },
+  { key:"2", label:"Tuesday" },
+  { key:"3", label:"Wednesday" },
+  { key:"4", label:"Thursday" },
+  { key:"5", label:"Friday" },
+  { key:"6", label:"Saturday" },
+  { key:"0", label:"Sunday" },
+];
+
+const HOUR_OPTIONS = Array.from({length:25},(_,i)=>i); // 0..24
+function hh(h) { return String(h).padStart(2,"0") + ":00"; }
+
+// Default windows: Mon-Sat 10:00-20:00, Sunday closed
+const DEFAULT_WINDOWS = {"1":[[10,20]],"2":[[10,20]],"3":[[10,20]],"4":[[10,20]],"5":[[10,20]],"6":[[10,20]],"0":[]};
 
 function ScheduleTab({ toast }) {
-  const today      = new Date();
+  const today = new Date();
   const [year, setYear]   = useState(today.getFullYear());
-  const [month, setMonth] = useState(today.getMonth()); // 0-indexed
+  const [month, setMonth] = useState(today.getMonth());
   const [blocked, setBlocked]   = useState([]); // ["YYYY-MM-DD", ...]
   const [loading, setLoading]   = useState(true);
-  const [toggling, setToggling] = useState(null); // date string being toggled
+  const [toggling, setToggling] = useState(null);
 
   // Working hours state
-  const [hours, setHours] = useState({ start: "10:00", end: "20:00", slot_duration: 60 });
+  const [slotMin,     setSlotMin]     = useState(30);
+  const [dayWindows,  setDayWindows]  = useState(DEFAULT_WINDOWS);
   const [savingHours, setSavingHours] = useState(false);
 
   const load = useCallback(() => {
     setLoading(true);
-    adminFetch("/blocked-dates")
-      .then((r) => setBlocked(Array.isArray(r) ? r : []))
-      .catch((e) => toast(e.message, "error"))
+    Promise.all([
+      adminFetch("/admin/settings").catch(() => null),
+      adminFetch("/admin/blocked-dates").catch(() => []),
+    ]).then(([settings, blockedRaw]) => {
+      if (settings) {
+        setSlotMin(settings.slot_minutes || 30);
+        if (settings.windows && Object.keys(settings.windows).length > 0) {
+          setDayWindows({ ...DEFAULT_WINDOWS, ...settings.windows });
+        }
+      }
+      // API returns [{date, reason}] objects — extract date string
+      const dates = Array.isArray(blockedRaw)
+        ? blockedRaw.map((x) => (typeof x === "string" ? x : x.date)).filter(Boolean)
+        : [];
+      setBlocked(dates);
+    }).catch((e) => toast(e.message,"error"))
       .finally(() => setLoading(false));
   }, [toast]);
 
   useEffect(() => { load(); }, [load]);
 
-  // Build calendar grid for current month
+  // Calendar helpers
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-  const firstDay    = new Date(year, month, 1).getDay(); // 0=Sun
-
-  const prevMonth = () => { if (month === 0) { setMonth(11); setYear(y => y - 1); } else setMonth(m => m - 1); };
-  const nextMonth = () => { if (month === 11) { setMonth(0); setYear(y => y + 1); } else setMonth(m => m + 1); };
-
-  const fmt = (d) => {
-    const mm = String(month + 1).padStart(2, "0");
-    const dd = String(d).padStart(2, "0");
-    return `${year}-${mm}-${dd}`;
-  };
-
-  const isPast    = (d) => new Date(year, month, d) < new Date(today.getFullYear(), today.getMonth(), today.getDate());
-  const isSunday  = (d) => new Date(year, month, d).getDay() === 0;
+  const firstDay    = new Date(year, month, 1).getDay();
+  const prevMonth = () => { if (month===0){setMonth(11);setYear(y=>y-1);}else setMonth(m=>m-1); };
+  const nextMonth = () => { if (month===11){setMonth(0);setYear(y=>y+1);}else setMonth(m=>m+1); };
+  const fmt = (d) => `${year}-${String(month+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+  const isPast    = (d) => new Date(year,month,d) < new Date(today.getFullYear(),today.getMonth(),today.getDate());
   const isBlocked = (d) => blocked.includes(fmt(d));
-  const isToday   = (d) => fmt(d) === today.toISOString().slice(0, 10);
+  const isToday   = (d) => fmt(d) === today.toISOString().slice(0,10);
 
   const toggleDate = async (d) => {
-    if (isPast(d) || isSunday(d)) return;
+    if (isPast(d)) return;
     const dateStr = fmt(d);
     setToggling(dateStr);
     try {
       if (isBlocked(d)) {
-        await adminFetch(`/admin/blocked-dates/${dateStr}`, { method: "DELETE" });
+        await adminFetch(`/admin/blocked-dates/${dateStr}`, { method:"DELETE" });
         setBlocked((prev) => prev.filter((x) => x !== dateStr));
-        toast("Date unblocked — clients can now book this day");
+        toast("Date unblocked");
       } else {
-        await adminFetch("/admin/blocked-dates", { method: "POST", body: JSON.stringify({ date: dateStr }) });
+        await adminFetch("/admin/blocked-dates", { method:"POST", body:JSON.stringify({ date:dateStr, reason:"" }) });
         setBlocked((prev) => [...prev, dateStr]);
-        toast("Date blocked — clients cannot book this day");
+        toast("Date blocked");
       }
-    } catch (e) { toast(e.message, "error"); }
+    } catch(e) { toast(e.message,"error"); }
     finally { setToggling(null); }
   };
+
+  // Day window helpers
+  const toggleDay = (key) => {
+    setDayWindows((prev) => {
+      const cur = prev[key] || [];
+      return { ...prev, [key]: cur.length>0 ? [] : [[10,20]] };
+    });
+  };
+  const updateBlock = (key, idx, field, val) => {
+    setDayWindows((prev) => {
+      const blocks = (prev[key]||[]).map((b,i) => i===idx ? (field===0?[Number(val),b[1]]:[b[0],Number(val)]) : b);
+      return { ...prev, [key]: blocks };
+    });
+  };
+  const addBlock    = (key) => setDayWindows((prev) => ({ ...prev, [key]: [...(prev[key]||[]), [9,17]] }));
+  const removeBlock = (key, idx) => setDayWindows((prev) => ({ ...prev, [key]: (prev[key]||[]).filter((_,i)=>i!==idx) }));
 
   const saveHours = async () => {
     setSavingHours(true);
     try {
-      await adminFetch("/admin/working-hours", {
-        method: "POST",
-        body: JSON.stringify(hours),
+      await adminFetch("/admin/settings", {
+        method: "PUT",
+        body: JSON.stringify({ slot_minutes: slotMin, windows: dayWindows }),
       });
-      toast("Working hours saved");
-    } catch {
-      // endpoint may not exist yet — show a friendly note
-      toast("Hours noted (API endpoint not yet configured)", "error");
-    } finally { setSavingHours(false); }
+      toast("Schedule saved successfully");
+    } catch(e) { toast(e.message,"error"); }
+    finally { setSavingHours(false); }
   };
 
   return (
     <div className="space-y-8">
       <div>
         <h3 className="font-display text-xl text-[#3A2E5D] mb-1">Schedule & Availability</h3>
-        <p className="text-sm text-[#9B8AC4]">Click any date to block/unblock it. Sundays are always closed. Blocked dates are shown in red.</p>
+        <p className="text-sm text-[#9B8AC4]">Set working hours per day, add breaks, and block specific dates.</p>
       </div>
 
-      {/* Calendar */}
+      {/* ── Working Hours Per Day ── */}
       <div className="bg-white rounded-2xl border border-[#C8B6E2] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[#E6DDF1] bg-[#F5EEF8] flex items-center justify-between flex-wrap gap-3">
+          <h4 className="text-sm font-semibold text-[#3A2E5D] flex items-center gap-2"><CalendarDays size={14} className="text-[#6B5B95]"/> Weekly Working Hours</h4>
+          <div className="flex items-center gap-2">
+            <label className="text-xs text-[#9B8AC4] font-medium">Slot duration:</label>
+            <select value={slotMin} onChange={(e)=>setSlotMin(Number(e.target.value))} className="border border-[#C8B6E2] rounded-lg px-2 py-1 text-xs text-[#3A2E5D] bg-white focus:outline-none focus:ring-1 focus:ring-[#6B5B95]">
+              {[15,20,30,45,60,90,120].map((m)=><option key={m} value={m}>{m} min</option>)}
+            </select>
+          </div>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-10"><Loader2 size={22} className="animate-spin text-[#6B5B95]"/></div>
+        ) : (
+          <div className="divide-y divide-[#F0EBF9]">
+            {WEEK_DAYS.map(({ key, label }) => {
+              const windows = dayWindows[key] || [];
+              const isOpen  = windows.length > 0;
+              return (
+                <div key={key} className="px-5 py-4">
+                  <div className="flex items-center gap-3 mb-1">
+                    <button onClick={() => toggleDay(key)}
+                      className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${isOpen?"bg-[#6B5B95]":"bg-gray-200"}`}>
+                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${isOpen?"translate-x-4":"translate-x-0"}`}/>
+                    </button>
+                    <span className="text-sm font-semibold text-[#3A2E5D] w-24">{label}</span>
+                    {!isOpen && <span className="text-xs text-[#9B8AC4]">Closed</span>}
+                    {isOpen && (
+                      <button onClick={() => addBlock(key)}
+                        className="ml-auto flex items-center gap-1 text-xs text-[#6B5B95] hover:text-[#3A2E5D] font-medium transition">
+                        <Plus size={11}/> Add break
+                      </button>
+                    )}
+                  </div>
+                  {isOpen && windows.map((block, idx) => (
+                    <div key={idx} className="flex items-center gap-2 mt-2 ml-12">
+                      <span className="text-[11px] text-[#9B8AC4] w-8">{idx===0?"Open":"Then"}</span>
+                      <select value={block[0]} onChange={(e)=>updateBlock(key,idx,0,e.target.value)}
+                        className="border border-[#C8B6E2] rounded-lg px-2 py-1 text-xs text-[#3A2E5D] bg-white focus:outline-none focus:ring-1 focus:ring-[#6B5B95]">
+                        {HOUR_OPTIONS.map((h)=><option key={h} value={h}>{hh(h)}</option>)}
+                      </select>
+                      <span className="text-[11px] text-[#9B8AC4]">to</span>
+                      <select value={block[1]} onChange={(e)=>updateBlock(key,idx,1,e.target.value)}
+                        className="border border-[#C8B6E2] rounded-lg px-2 py-1 text-xs text-[#3A2E5D] bg-white focus:outline-none focus:ring-1 focus:ring-[#6B5B95]">
+                        {HOUR_OPTIONS.map((h)=><option key={h} value={h}>{hh(h)}</option>)}
+                      </select>
+                      {idx>0 && (
+                        <button onClick={()=>removeBlock(key,idx)}
+                          className="p-1 rounded-lg text-red-400 hover:bg-red-50 transition"><X size={11}/></button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <div className="px-5 py-4 border-t border-[#E6DDF1] bg-[#F5EEF8] flex justify-end">
+          <button onClick={saveHours} disabled={savingHours||loading}
+            className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#6B5B95] text-white text-sm font-semibold hover:bg-[#5a4a84] disabled:opacity-60 transition">
+            {savingHours?<Loader2 size={13} className="animate-spin"/>:<Check size={13}/>} Save Schedule
+          </button>
+        </div>
+      </div>
+
+      {/* ── Block Specific Dates ── */}
+      <div className="bg-white rounded-2xl border border-[#C8B6E2] overflow-hidden">
+        <div className="px-5 py-4 border-b border-[#E6DDF1] bg-[#F5EEF8]">
+          <h4 className="text-sm font-semibold text-[#3A2E5D] flex items-center gap-2"><CalendarX size={14} className="text-red-400"/> Block Specific Dates</h4>
+          <p className="text-xs text-[#9B8AC4] mt-0.5">Click any date to block or unblock it. Blocked dates are unavailable to clients.</p>
+        </div>
         {/* Month nav */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[#E6DDF1] bg-[#F5EEF8]">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-[#E6DDF1]">
           <button onClick={prevMonth} className="p-2 rounded-xl hover:bg-[#E6DDF1] text-[#6B5B95] transition">◀</button>
-          <span className="font-display text-lg text-[#3A2E5D]">{MONTHS[month]} {year}</span>
+          <span className="font-display text-base text-[#3A2E5D]">{MONTHS[month]} {year}</span>
           <button onClick={nextMonth} className="p-2 rounded-xl hover:bg-[#E6DDF1] text-[#6B5B95] transition">▶</button>
         </div>
-
         {/* Day headers */}
         <div className="grid grid-cols-7 border-b border-[#E6DDF1]">
-          {DAYS.map((d) => (
-            <div key={d} className={`py-2 text-center text-[11px] font-bold uppercase tracking-wider ${d === "Sun" ? "text-red-400" : "text-[#9B8AC4]"}`}>{d}</div>
+          {CAL_DAYS.map((d) => (
+            <div key={d} className={`py-2 text-center text-[11px] font-bold uppercase tracking-wider ${d==="Sun"?"text-red-400":"text-[#9B8AC4]"}`}>{d}</div>
           ))}
         </div>
-
         {/* Day cells */}
         {loading ? (
           <div className="flex justify-center py-12"><Loader2 size={24} className="animate-spin text-[#6B5B95]"/></div>
         ) : (
           <div className="grid grid-cols-7">
-            {/* Empty cells before first day */}
             {Array.from({ length: firstDay }).map((_, i) => (
               <div key={`e${i}`} className="h-12 border-b border-r border-[#F0EBF9]" />
             ))}
@@ -1219,7 +1520,6 @@ function ScheduleTab({ toast }) {
             {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((d) => {
               const dateStr  = fmt(d);
               const past     = isPast(d);
-              const sun      = isSunday(d);
               const block    = isBlocked(d);
               const spinning = toggling === dateStr;
               const todayDay = isToday(d);
@@ -1227,15 +1527,15 @@ function ScheduleTab({ toast }) {
               let cellCls = "h-12 border-b border-r border-[#F0EBF9] flex items-center justify-center relative transition";
               let numCls  = "w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium";
 
-              if (sun)         { cellCls += " bg-gray-50";       numCls += " text-red-300 cursor-not-allowed"; }
-              else if (past)   { cellCls += " bg-gray-50/50";    numCls += " text-[#C8B6E2] cursor-not-allowed"; }
+              if (past)        { cellCls += " bg-gray-50/50";    numCls += " text-[#C8B6E2] cursor-not-allowed"; }
               else if (block)  { cellCls += " bg-red-50 cursor-pointer hover:bg-red-100"; numCls += " bg-red-400 text-white"; }
               else             { cellCls += " cursor-pointer hover:bg-[#F5EEF8]"; numCls += " text-[#3A2E5D] hover:bg-[#E6DDF1]"; }
 
               if (todayDay && !block) numCls += " ring-2 ring-[#6B5B95]";
 
               return (
-                <div key={d} className={cellCls} onClick={() => toggleDate(d)} title={block ? "Click to unblock" : sun ? "Always closed" : past ? "Past date" : "Click to block"}>
+                <div key={d} className={cellCls} onClick={() => toggleDate(d)}
+                  title={block ? "Click to unblock" : past ? "Past date" : "Click to block"}>
                   <span className={numCls}>
                     {spinning ? <Loader2 size={13} className="animate-spin" /> : d}
                   </span>
@@ -1250,13 +1550,13 @@ function ScheduleTab({ toast }) {
 
         {/* Legend */}
         <div className="flex flex-wrap gap-4 px-5 py-3 bg-[#F5EEF8] border-t border-[#E6DDF1] text-[11px] text-[#9B8AC4]">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-400 inline-block"/>{blocked.length} blocked date{blocked.length !== 1 ? "s" : ""}</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-red-400 inline-block"/>{blocked.length} blocked</span>
           <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full ring-2 ring-[#6B5B95] inline-block"/>Today</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-gray-200 inline-block"/>Closed (Sunday / past)</span>
+          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-full bg-gray-200 inline-block"/>Past</span>
         </div>
       </div>
 
-      {/* Blocked dates list */}
+      {/* Blocked dates pill list */}
       {blocked.length > 0 && (
         <div className="bg-white rounded-2xl border border-[#C8B6E2] p-5">
           <h4 className="text-sm font-semibold text-[#3A2E5D] mb-3 flex items-center gap-2"><CalendarX size={14} className="text-red-400"/> All Blocked Dates</h4>
@@ -1267,43 +1567,319 @@ function ScheduleTab({ toast }) {
                 <button onClick={async () => {
                   setToggling(d);
                   try {
-                    await adminFetch(`/admin/blocked-dates/${d}`, { method: "DELETE" });
+                    await adminFetch(`/admin/blocked-dates/${d}`, { method:"DELETE" });
                     setBlocked((prev) => prev.filter((x) => x !== d));
                     toast("Date unblocked");
-                  } catch (e) { toast(e.message, "error"); }
+                  } catch(e) { toast(e.message,"error"); }
                   finally { setToggling(null); }
-                }} className="hover:text-red-800 ml-0.5">
-                  <X size={11}/>
-                </button>
+                }} className="hover:text-red-800 ml-0.5"><X size={11}/></button>
               </span>
             ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
 
-      {/* Working hours */}
-      <div className="bg-white rounded-2xl border border-[#C8B6E2] p-5">
-        <h4 className="text-sm font-semibold text-[#3A2E5D] mb-4 flex items-center gap-2"><CalendarDays size={14} className="text-[#6B5B95]"/> Working Hours</h4>
-        <div className="grid sm:grid-cols-3 gap-4">
-          <div>
-            <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Start time</label>
-            <input type="time" value={hours.start} onChange={(e) => setHours((h) => ({ ...h, start: e.target.value }))} className={inputCls} />
-          </div>
-          <div>
-            <label className="text-xs text-[#9B8AC4] font-medium block mb-1">End time</label>
-            <input type="time" value={hours.end} onChange={(e) => setHours((h) => ({ ...h, end: e.target.value }))} className={inputCls} />
-          </div>
-          <div>
-            <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Slot duration (mins)</label>
-            <select value={hours.slot_duration} onChange={(e) => setHours((h) => ({ ...h, slot_duration: Number(e.target.value) }))} className={inputCls}>
-              {[30, 45, 60, 90, 120].map((m) => <option key={m} value={m}>{m} min</option>)}
-            </select>
-          </div>
+// ════════════════════════════════════════════════════════════════════════════
+// SERVICE CATEGORIES TAB — CRUD for booking service categories
+// API: GET/POST/PUT/DELETE /admin/categories
+// ════════════════════════════════════════════════════════════════════════════
+const EMPTY_SCAT = { id:"", name:"", tagline:"", description:"", icon:"stars", order:100 };
+
+function ServiceCategoriesTab({ toast }) {
+  const [cats,    setCats]    = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [adding,  setAdding]  = useState(false);
+  const [editing, setEditing] = useState(null); // cat object being edited
+  const [form,    setForm]    = useState(EMPTY_SCAT);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    adminFetch("/admin/categories")
+      .then((r) => setCats(Array.isArray(r) ? r : []))
+      .catch((e) => toast(e.message,"error"))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const sf = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+
+  const openAdd = () => { setForm(EMPTY_SCAT); setEditing(null); setAdding(true); };
+  const openEdit = (c) => { setForm({ ...c }); setEditing(c); setAdding(true); };
+  const cancel   = () => { setAdding(false); setEditing(null); };
+
+  const save = async (e) => {
+    e.preventDefault();
+    try {
+      if (editing) {
+        await adminFetch(`/admin/categories/${editing.id}`, { method:"PUT", body:JSON.stringify({ ...form, order:parseInt(form.order,10)||100 }) });
+        toast("Category updated");
+      } else {
+        await adminFetch("/admin/categories", { method:"POST", body:JSON.stringify({ ...form, order:parseInt(form.order,10)||100 }) });
+        toast("Category created");
+      }
+      cancel(); load();
+    } catch(e) { toast(e.message,"error"); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Delete this category? All services in it will also be deleted.")) return;
+    try {
+      await adminFetch(`/admin/categories/${id}`, { method:"DELETE" });
+      setCats((prev) => prev.filter((c) => c.id !== id));
+      toast("Category deleted");
+    } catch(e) { toast(e.message,"error"); }
+  };
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 size={28} className="animate-spin text-[#6B5B95]"/></div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="font-display text-xl text-[#3A2E5D]">Booking Categories ({cats.length})</h3>
+        <div className="flex gap-2">
+          <button onClick={load} className="p-2 rounded-xl bg-[#E6DDF1] text-[#6B5B95] hover:bg-[#C8B6E2] transition"><RefreshCw size={14}/></button>
+          <button onClick={openAdd} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#6B5B95] text-white text-xs font-medium hover:bg-[#5a4a84] transition">
+            <Plus size={13}/> New Category
+          </button>
         </div>
-        <p className="text-[11px] text-[#9B8AC4] mt-3">Mon–Sat only. Sundays and blocked dates are always unavailable to clients.</p>
-        <button onClick={saveHours} disabled={savingHours} className="mt-4 flex items-center gap-2 px-4 py-2 rounded-xl bg-[#6B5B95] text-white text-sm font-medium hover:bg-[#5a4a84] disabled:opacity-60 transition">
-          {savingHours ? <Loader2 size={13} className="animate-spin"/> : <Check size={13}/>} Save Hours
-        </button>
+      </div>
+
+      {/* Add / Edit form */}
+      {adding && (
+        <form onSubmit={save} className="bg-white border border-[#C8B6E2] rounded-2xl p-5 mb-6 space-y-3">
+          <h4 className="text-sm font-semibold text-[#3A2E5D]">{editing ? "Edit Category" : "New Booking Category"}</h4>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">ID (slug, no spaces) *</label>
+              <input required value={form.id} onChange={sf("id")} disabled={!!editing}
+                placeholder="e.g. tarot-readings" className={`${inputCls} disabled:opacity-60`} />
+            </div>
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Name *</label>
+              <input required value={form.name} onChange={sf("name")} placeholder="e.g. Tarot Readings" className={inputCls} />
+            </div>
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Tagline</label>
+              <input value={form.tagline} onChange={sf("tagline")} placeholder="Short subtitle" className={inputCls} />
+            </div>
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Icon key</label>
+              <input value={form.icon} onChange={sf("icon")} placeholder="stars" className={inputCls} />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Description</label>
+              <textarea value={form.description} onChange={sf("description")} rows={2} className={inputCls} placeholder="Optional description"/>
+            </div>
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Order (lower = first)</label>
+              <input type="number" value={form.order} onChange={sf("order")} className={inputCls} />
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="submit" className="flex-1 py-2.5 rounded-xl bg-[#6B5B95] text-white text-sm font-semibold hover:bg-[#5a4a84] transition">{editing ? "Save Changes" : "Create Category"}</button>
+            <button type="button" onClick={cancel} className="px-4 py-2.5 rounded-xl bg-white border border-[#C8B6E2] text-[#3A2E5D] text-sm hover:bg-[#E6DDF1] transition">Cancel</button>
+          </div>
+        </form>
+      )}
+
+      <div className="space-y-3">
+        {cats.length === 0 && <div className="text-center py-10 text-[#9B8AC4]">No booking categories yet</div>}
+        {cats.map((c) => (
+          <div key={c.id} className="flex items-center justify-between bg-white/70 border border-[#C8B6E2] rounded-2xl px-5 py-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-[#3A2E5D]">{c.name}</span>
+                <span className="text-[10px] bg-[#E6DDF1] text-[#6B5B95] px-2 py-0.5 rounded-full font-mono">{c.id}</span>
+              </div>
+              {c.tagline && <div className="text-xs text-[#9B8AC4] mt-0.5">{c.tagline}</div>}
+            </div>
+            <div className="flex gap-1 ml-4">
+              <button onClick={() => openEdit(c)} className="p-1.5 rounded-lg text-[#6B5B95] hover:bg-[#E6DDF1] transition"><Edit2 size={13}/></button>
+              <button onClick={() => del(c.id)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition"><Trash2 size={13}/></button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SERVICES TAB — CRUD for booking services
+// API: GET/POST/PUT/DELETE /admin/services
+// ════════════════════════════════════════════════════════════════════════════
+const EMPTY_SVC = { id:"", category:"", name:"", duration_minutes:"", price_inr:"", description:"", is_voice_note:false, variant:"call", program_days:"" };
+
+function ServicesTab({ toast }) {
+  const [services, setServices] = useState([]);
+  const [cats,     setCats]     = useState([]);
+  const [loading,  setLoading]  = useState(true);
+  const [adding,   setAdding]   = useState(false);
+  const [editing,  setEditing]  = useState(null);
+  const [form,     setForm]     = useState(EMPTY_SVC);
+  const [filterCat,setFilterCat]= useState("all");
+
+  const load = useCallback(() => {
+    setLoading(true);
+    Promise.all([
+      adminFetch("/admin/services").catch(() => []),
+      adminFetch("/admin/categories").catch(() => []),
+    ]).then(([svcs, cats]) => {
+      setServices(Array.isArray(svcs) ? svcs : []);
+      setCats(Array.isArray(cats) ? cats : []);
+    }).catch((e) => toast(e.message,"error"))
+      .finally(() => setLoading(false));
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const sf  = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const sfb = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.checked }));
+
+  const openAdd  = () => { setForm({ ...EMPTY_SVC, category: cats[0]?.id || "" }); setEditing(null); setAdding(true); };
+  const openEdit = (s) => { setForm({ ...s, duration_minutes: s.duration_minutes ?? "", program_days: s.program_days ?? "" }); setEditing(s); setAdding(true); };
+  const cancel   = () => { setAdding(false); setEditing(null); };
+
+  const save = async (e) => {
+    e.preventDefault();
+    const payload = {
+      ...form,
+      price_inr:        parseInt(form.price_inr, 10) || 0,
+      duration_minutes: form.duration_minutes !== "" ? parseInt(form.duration_minutes, 10) : null,
+      program_days:     form.program_days !== ""     ? parseInt(form.program_days, 10)     : null,
+    };
+    try {
+      if (editing) {
+        await adminFetch(`/admin/services/${editing.id}`, { method:"PUT", body:JSON.stringify(payload) });
+        toast("Service updated");
+      } else {
+        await adminFetch("/admin/services", { method:"POST", body:JSON.stringify(payload) });
+        toast("Service created");
+      }
+      cancel(); load();
+    } catch(e) { toast(e.message,"error"); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Delete this service?")) return;
+    try {
+      await adminFetch(`/admin/services/${id}`, { method:"DELETE" });
+      setServices((prev) => prev.filter((s) => s.id !== id));
+      toast("Service deleted");
+    } catch(e) { toast(e.message,"error"); }
+  };
+
+  const catName = (id) => cats.find((c) => c.id === id)?.name || id;
+  const filtered = filterCat === "all" ? services : services.filter((s) => s.category === filterCat);
+
+  if (loading) return <div className="flex justify-center py-20"><Loader2 size={28} className="animate-spin text-[#6B5B95]"/></div>;
+
+  return (
+    <div>
+      <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+        <h3 className="font-display text-xl text-[#3A2E5D]">Booking Services ({services.length})</h3>
+        <div className="flex gap-2 flex-wrap">
+          <select value={filterCat} onChange={(e) => setFilterCat(e.target.value)}
+            className="border border-[#C8B6E2] rounded-xl px-3 py-2 text-xs text-[#3A2E5D] bg-white focus:outline-none focus:ring-1 focus:ring-[#6B5B95]">
+            <option value="all">All Categories</option>
+            {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          </select>
+          <button onClick={load} className="p-2 rounded-xl bg-[#E6DDF1] text-[#6B5B95] hover:bg-[#C8B6E2] transition"><RefreshCw size={14}/></button>
+          <button onClick={openAdd} className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-[#6B5B95] text-white text-xs font-medium hover:bg-[#5a4a84] transition">
+            <Plus size={13}/> New Service
+          </button>
+        </div>
+      </div>
+
+      {/* Add / Edit form */}
+      {adding && (
+        <form onSubmit={save} className="bg-white border border-[#C8B6E2] rounded-2xl p-5 mb-6 space-y-3">
+          <h4 className="text-sm font-semibold text-[#3A2E5D]">{editing ? "Edit Service" : "New Booking Service"}</h4>
+          <div className="grid sm:grid-cols-2 gap-3">
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">ID (slug) *</label>
+              <input required value={form.id} onChange={sf("id")} disabled={!!editing}
+                placeholder="e.g. tarot-15min" className={`${inputCls} disabled:opacity-60`} />
+            </div>
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Name *</label>
+              <input required value={form.name} onChange={sf("name")} placeholder="e.g. 15-Min Tarot Reading" className={inputCls} />
+            </div>
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Category *</label>
+              <select required value={form.category} onChange={sf("category")} className={inputCls}>
+                <option value="">Select category</option>
+                {cats.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Price (₹) *</label>
+              <input required type="number" min="0" value={form.price_inr} onChange={sf("price_inr")} placeholder="999" className={inputCls} />
+            </div>
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Duration (minutes)</label>
+              <input type="number" min="1" value={form.duration_minutes} onChange={sf("duration_minutes")} placeholder="15" className={inputCls} />
+            </div>
+            <div>
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Variant</label>
+              <select value={form.variant} onChange={sf("variant")} className={inputCls}>
+                <option value="call">Call</option>
+                <option value="chat">Chat</option>
+                <option value="voice_note">Voice Note</option>
+                <option value="program">Program</option>
+              </select>
+            </div>
+            {form.variant === "program" && (
+              <div>
+                <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Program Days</label>
+                <input type="number" min="1" value={form.program_days} onChange={sf("program_days")} placeholder="21" className={inputCls} />
+              </div>
+            )}
+            <div className="sm:col-span-2">
+              <label className="text-xs text-[#9B8AC4] font-medium block mb-1">Description</label>
+              <textarea value={form.description} onChange={sf("description")} rows={2} className={inputCls} placeholder="Short description for clients"/>
+            </div>
+            <div className="sm:col-span-2 flex items-center gap-2">
+              <input type="checkbox" id="svc_voice" checked={form.is_voice_note} onChange={sfb("is_voice_note")} className="rounded"/>
+              <label htmlFor="svc_voice" className="text-xs text-[#3A2E5D] font-medium">This is a voice-note service (async, no calendar slot)</label>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-1">
+            <button type="submit" className="flex-1 py-2.5 rounded-xl bg-[#6B5B95] text-white text-sm font-semibold hover:bg-[#5a4a84] transition">{editing ? "Save Changes" : "Create Service"}</button>
+            <button type="button" onClick={cancel} className="px-4 py-2.5 rounded-xl bg-white border border-[#C8B6E2] text-[#3A2E5D] text-sm hover:bg-[#E6DDF1] transition">Cancel</button>
+          </div>
+        </form>
+      )}
+
+      {/* Services list */}
+      <div className="space-y-3">
+        {filtered.length === 0 && <div className="text-center py-10 text-[#9B8AC4]">No services found</div>}
+        {filtered.map((s) => (
+          <div key={s.id} className="flex items-start justify-between bg-white/70 border border-[#C8B6E2] rounded-2xl px-5 py-4">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-[#3A2E5D]">{s.name}</span>
+                <span className="text-[10px] font-mono bg-[#E6DDF1] text-[#6B5B95] px-2 py-0.5 rounded-full">{s.id}</span>
+                <span className="text-[10px] bg-[#EBB99A]/30 text-[#3A2E5D] px-2 py-0.5 rounded-full">{catName(s.category)}</span>
+              </div>
+              <div className="flex items-center gap-3 mt-1 text-xs text-[#9B8AC4]">
+                <span className="font-semibold text-[#6B5B95]">₹{(s.price_inr||0).toLocaleString("en-IN")}</span>
+                {s.duration_minutes && <span>{s.duration_minutes} min</span>}
+                {s.variant && <span className="capitalize">{s.variant.replace("_"," ")}</span>}
+                {s.is_voice_note && <span className="bg-yellow-100 text-yellow-700 px-2 py-0.5 rounded-full">Voice Note</span>}
+              </div>
+              {s.description && <div className="text-xs text-[#9B8AC4] mt-1 truncate max-w-md">{s.description}</div>}
+            </div>
+            <div className="flex gap-1 ml-4 flex-shrink-0">
+              <button onClick={() => openEdit(s)} className="p-1.5 rounded-lg text-[#6B5B95] hover:bg-[#E6DDF1] transition"><Edit2 size={13}/></button>
+              <button onClick={() => del(s.id)} className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 transition"><Trash2 size={13}/></button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -1320,6 +1896,8 @@ const TABS = [
   { id:"products",   label:"Products",   icon:Package      },
   { id:"promotions", label:"Promos",     icon:Tag          },
   { id:"schedule",   label:"Schedule",   icon:CalendarDays },
+  { id:"svccat",     label:"Svc Cats",   icon:BookOpen     },
+  { id:"services",   label:"Services",   icon:Sparkles     },
 ];
 
 export default function AdminDashboard() {
@@ -1401,13 +1979,15 @@ export default function AdminDashboard() {
 
             {/* Tab content — each tab is responsible for its own overflow-x-auto on tables */}
             <div className="min-w-0">
-              {activeTab === "stats"      && <StatsTab      toast={showToast} />}
-              {activeTab === "bookings"   && <BookingsTab   toast={showToast} />}
-              {activeTab === "orders"     && <OrdersTab     toast={showToast} />}
-              {activeTab === "categories" && <CategoriesTab toast={showToast} />}
-              {activeTab === "products"   && <ProductsTab   toast={showToast} />}
-              {activeTab === "promotions" && <PromotionsTab toast={showToast} />}
-              {activeTab === "schedule"   && <ScheduleTab   toast={showToast} />}
+              {activeTab === "stats"      && <StatsTab               toast={showToast} />}
+              {activeTab === "bookings"   && <BookingsTab            toast={showToast} />}
+              {activeTab === "orders"     && <OrdersTab              toast={showToast} />}
+              {activeTab === "categories" && <CategoriesTab          toast={showToast} />}
+              {activeTab === "products"   && <ProductsTab            toast={showToast} />}
+              {activeTab === "promotions" && <PromotionsTab          toast={showToast} />}
+              {activeTab === "schedule"   && <ScheduleTab            toast={showToast} />}
+              {activeTab === "svccat"     && <ServiceCategoriesTab   toast={showToast} />}
+              {activeTab === "services"   && <ServicesTab            toast={showToast} />}
             </div>
           </div>
         </main>
