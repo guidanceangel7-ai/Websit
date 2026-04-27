@@ -492,6 +492,15 @@ async def seed_db():
             "slot_minutes": 30,
             "open_days": [0, 1, 2, 3, 4, 5],
         })
+    # ── Indexes to prevent sort-memory errors on MongoDB Atlas free tier ──
+    await db.products.create_index("order")
+    await db.products.create_index("product_category_id")
+    await db.product_categories.create_index("order")
+    await db.categories.create_index("order")
+    await db.bookings.create_index("created_at")
+    await db.orders.create_index("created_at")
+    await db.promotions.create_index("starts_at")
+    await db.blocked_dates.create_index("date")
     logger.info(
         f"DB seeded {SEED_VERSION}. ProductCats: {await db.product_categories.count_documents({})}, "
         f"Products: {await db.products.count_documents({})}"
@@ -531,7 +540,7 @@ async def list_services():
 @api_router.get("/categories")
 async def list_categories():
     """Return categories with their nested services."""
-    cats = await db.categories.find({}, {"_id": 0}).sort("order", 1).allow_disk_use(True).to_list(length=20)
+    cats = sorted(await db.categories.find({}, {"_id": 0}).to_list(length=20), key=lambda x: x.get("order", 9999))
     services = await db.services.find({}, {"_id": 0}).to_list(length=200)
     by_cat: dict[str, list] = {}
     for s in services:
@@ -1007,7 +1016,7 @@ async def admin_login(payload: AdminLogin):
 
 @api_router.get("/admin/bookings", response_model=List[Booking])
 async def admin_list_bookings(_admin: str = Depends(verify_admin)):
-    docs = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).allow_disk_use(True).to_list(length=500)
+    docs = sorted(await db.bookings.find({}, {"_id": 0}).to_list(length=500), key=lambda x: x.get("created_at", ""), reverse=True)
     return docs
 
 
@@ -1113,7 +1122,7 @@ def _csv_response(rows: List[List], headers: List[str], filename: str):
 
 @api_router.get("/admin/bookings/export")
 async def admin_export_bookings(_admin: str = Depends(verify_admin)):
-    docs = await db.bookings.find({}, {"_id": 0}).sort("created_at", -1).allow_disk_use(True).to_list(length=5000)
+    docs = sorted(await db.bookings.find({}, {"_id": 0}).to_list(length=5000), key=lambda x: x.get("created_at", ""), reverse=True)
     headers = [
         "Booking ID", "Created", "Customer", "Email", "Phone",
         "Service", "Date", "Slot",
@@ -1147,7 +1156,7 @@ async def admin_export_bookings(_admin: str = Depends(verify_admin)):
 
 @api_router.get("/admin/orders/export")
 async def admin_export_orders(_admin: str = Depends(verify_admin)):
-    docs = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).allow_disk_use(True).to_list(length=5000)
+    docs = sorted(await db.orders.find({}, {"_id": 0}).to_list(length=5000), key=lambda x: x.get("created_at", ""), reverse=True)
     headers = [
         "Order ID", "Created", "Customer", "Email", "Phone",
         "Items", "Total (INR)", "Payment Status", "Order Status",
@@ -1278,7 +1287,7 @@ class BlockedDate(BaseModel):
 
 @api_router.get("/admin/blocked-dates")
 async def list_blocked_dates(_admin: str = Depends(verify_admin)):
-    docs = await db.blocked_dates.find({}, {"_id": 0}).sort("date", 1).allow_disk_use(True).to_list(length=500)
+    docs = sorted(await db.blocked_dates.find({}, {"_id": 0}).to_list(length=500), key=lambda x: x.get("date", ""))
     return docs
 
 
@@ -1402,7 +1411,7 @@ class CategoryIn(BaseModel):
 
 @api_router.get("/admin/categories")
 async def admin_list_categories(_admin: str = Depends(verify_admin)):
-    docs = await db.categories.find({}, {"_id": 0}).sort("order", 1).allow_disk_use(True).to_list(length=100)
+    docs = sorted(await db.categories.find({}, {"_id": 0}).to_list(length=100), key=lambda x: x.get("order", 9999))
     return docs
 
 
@@ -1588,31 +1597,27 @@ def _normalize_product_images(doc: dict) -> dict:
 @api_router.get("/product-categories")
 async def public_list_product_categories():
     # Step 1: get categories
-    cats = await db.product_categories.find({}, {"_id": 0}).to_list(50)
-
-    # Step 2: get LIMITED products (NO SORT)
-    products = await db.products.find({}, {"_id": 0}).limit(50).to_list(50)
-
-    # Step 3: group products by category
-    by_cat = {}
-
+    cats = sorted(
+        await db.product_categories.find({}, {"_id": 0}).to_list(200),
+        key=lambda x: x.get("order", 9999)
+    )
+    products = sorted(
+        await db.products.find({}, {"_id": 0}).to_list(500),
+        key=lambda x: x.get("order", 9999)
+    )
+    by_cat: dict = {}
     for p in products:
         cat_id = p.get("product_category_id")
-        if cat_id not in by_cat:
-            by_cat[cat_id] = []
-        by_cat[cat_id].append(p)
-
-    # Step 4: attach products to categories
+        by_cat.setdefault(cat_id, []).append(p)
     for c in cats:
         c["products"] = by_cat.get(c.get("id"), [])
-
     return cats
 
 
 # ----- Admin product category CRUD -----
 @api_router.get("/admin/product-categories")
 async def admin_list_product_categories(_admin: str = Depends(verify_admin)):
-    docs = await db.product_categories.find({}, {"_id": 0}).sort("order", 1).allow_disk_use(True).to_list(length=100)
+    docs = sorted(await db.product_categories.find({}, {"_id": 0}).to_list(length=100), key=lambda x: x.get("order", 9999))
     return docs
 
 
@@ -1650,7 +1655,7 @@ async def admin_delete_product_category(cid: str, _admin: str = Depends(verify_a
 
 @api_router.get("/products")
 async def public_list_products():
-    docs = await db.products.find({}, {"_id": 0}).sort("order", 1).allow_disk_use(True).to_list(length=200)
+    docs = sorted(await db.products.find({}, {"_id": 0}).to_list(length=200), key=lambda x: x.get("order", 9999))
     return [_normalize_product_images(d) for d in docs]
 
 
@@ -1673,7 +1678,7 @@ async def public_list_tags():
 
 @api_router.get("/admin/products")
 async def admin_list_products(_admin: str = Depends(verify_admin)):
-    docs = await db.products.find({}, {"_id": 0}).sort("order", 1).allow_disk_use(True).to_list(length=500)
+    docs = sorted(await db.products.find({}, {"_id": 0}).to_list(length=500), key=lambda x: x.get("order", 9999))
     return [_normalize_product_images(d) for d in docs]
 
 
@@ -2043,7 +2048,7 @@ async def razorpay_webhook(request: Request):
 
 @api_router.get("/admin/orders")
 async def admin_list_orders(_admin: str = Depends(verify_admin)):
-    docs = await db.orders.find({}, {"_id": 0}).sort("created_at", -1).allow_disk_use(True).to_list(length=1000)
+    docs = sorted(await db.orders.find({}, {"_id": 0}).to_list(length=1000), key=lambda x: x.get("created_at", ""), reverse=True)
     return docs
 
 
@@ -2180,7 +2185,7 @@ async def public_validate_coupon(payload: CouponValidateIn):
 # ----- Admin CRUD on promotions -----
 @api_router.get("/admin/promotions")
 async def admin_list_promotions(_admin: str = Depends(verify_admin)):
-    docs = await db.promotions.find({}, {"_id": 0}).sort("starts_at", -1).allow_disk_use(True).to_list(length=500)
+    docs = sorted(await db.promotions.find({}, {"_id": 0}).to_list(length=500), key=lambda x: x.get("starts_at", ""), reverse=True)
     return docs
 
 
