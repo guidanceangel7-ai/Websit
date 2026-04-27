@@ -26,15 +26,16 @@ const DialogContent = React.forwardRef(({ className, children, ...props }, ref) 
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        // Mobile: anchored near top so footer buttons are always visible
-        // Desktop: centred as normal
-        "fixed left-[50%] z-50 grid bg-white shadow-xl duration-200",
+        // Layout: flex column so footer is ALWAYS pinned at bottom
+        "fixed left-[50%] z-50 flex flex-col bg-white shadow-xl duration-200",
+        // Mobile: near top of screen | Desktop: centred
         "top-3 translate-x-[-50%] translate-y-0 sm:top-[50%] sm:translate-y-[-50%]",
+        // Width
         "w-[calc(100vw-24px)] sm:w-full max-w-lg",
         // Animations
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]",
-        // Height: leave room for browser bar + banner on mobile
-        "rounded-2xl sm:rounded-3xl p-0 overflow-hidden max-h-[calc(100dvh-24px)] sm:max-h-[90vh]",
+        // Height cap — overflow hidden clips rounded corners only, NOT children
+        "rounded-2xl sm:rounded-3xl p-0 overflow-hidden max-h-[calc(100dvh-16px)] sm:max-h-[90vh]",
         className
       )}
       {...props}
