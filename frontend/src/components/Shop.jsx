@@ -962,46 +962,65 @@ export default function Shop({ initialCategoryId, initialProductId }) {
   useEffect(() => {
     let alive = true;
     setLoadError(false);
-    setLoading(true);
     setSlowLoad(false);
 
-    // Show cached data instantly while re-fetching in background
+    // ── Step 1: Load from localStorage immediately (instant, no network) ──────
+    // Data is stored for 24 hours. After that it re-fetches.
+    // This means the shop loads instantly on every visit — no backend needed.
+    const CACHE_KEY = "ga_shop_v2";
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+    let hasCache = false;
     try {
-      const cached = sessionStorage.getItem("ga_shop_cache");
-      if (cached) {
-        const { cats, tags, ts } = JSON.parse(cached);
-        const age = Date.now() - ts;
-        if (age < 5 * 60 * 1000 && Array.isArray(cats) && cats.length > 0) {
+      const raw = localStorage.getItem(CACHE_KEY);
+      if (raw) {
+        const { cats, tags, ts } = JSON.parse(raw);
+        if (Date.now() - ts < CACHE_TTL && Array.isArray(cats) && cats.length > 0) {
           setCategories(cats);
           categoriesRef.current = cats;
           setAllTags(Array.isArray(tags) ? tags : []);
           setLoading(false);
+          hasCache = true;
         }
       }
     } catch (_) {}
 
-    // Show "waking up" message after 4 seconds
-    const slowTimer = setTimeout(() => { if (alive) setSlowLoad(true); }, 4000);
-    // Show error + retry button after 70 seconds (backend truly unresponsive)
-    const errorTimer = setTimeout(() => { if (alive) { setLoadError(true); setLoading(false); setSlowLoad(false); } }, 70000);
+    // ── Step 2: Always re-fetch in background to keep cache fresh ─────────────
+    // If cache exists → fetch silently (no spinner shown to user)
+    // If no cache    → show spinner + waking up message until data arrives
+    if (!hasCache) setLoading(true);
+
+    const slowTimer = setTimeout(() => { if (alive && !hasCache) setSlowLoad(true); }, 5000);
+    const errorTimer = setTimeout(() => {
+      if (alive && !hasCache) { setLoadError(true); setLoading(false); setSlowLoad(false); }
+    }, 75000);
 
     const controller = new AbortController();
 
     Promise.all([
-      fetch(`${API}/product-categories`, { signal: controller.signal }).then((r) => r.json()).catch((e) => { if (e.name === "AbortError") throw e; return []; }),
-      fetch(`${API}/tags`, { signal: controller.signal }).then((r) => r.json()).catch((e) => { if (e.name === "AbortError") throw e; return []; }),
+      fetch(`${API}/product-categories`, { signal: controller.signal })
+        .then((r) => r.json()).catch((e) => { if (e.name === "AbortError") throw e; return null; }),
+      fetch(`${API}/tags`, { signal: controller.signal })
+        .then((r) => r.json()).catch((e) => { if (e.name === "AbortError") throw e; return null; }),
     ]).then(([cats, tags]) => {
       if (!alive) return;
-      const safeCats = Array.isArray(cats) ? cats : [];
-      setCategories(safeCats);
-      categoriesRef.current = safeCats;
-      setAllTags(Array.isArray(tags) ? tags : []);
-      setLoadError(false);
-      try {
-        sessionStorage.setItem("ga_shop_cache", JSON.stringify({ cats: safeCats, tags, ts: Date.now() }));
-      } catch (_) {}
+      const safeCats = Array.isArray(cats) ? cats : null;
+      // Only update state if we got real data back
+      if (safeCats && safeCats.length > 0) {
+        setCategories(safeCats);
+        categoriesRef.current = safeCats;
+        setAllTags(Array.isArray(tags) ? tags : []);
+        setLoadError(false);
+        // Save to localStorage so next visit is instant
+        try {
+          localStorage.setItem("ga_shop_v2", JSON.stringify({ cats: safeCats, tags, ts: Date.now() }));
+        } catch (_) {}
+      } else if (!hasCache) {
+        // Backend returned empty and we have no cache — show error
+        setLoadError(true);
+      }
     }).catch(() => {
-      // AbortError or network failure — error timer will handle UI
+      // Network/abort error — if we have cache keep showing it, otherwise show error
+      if (alive && !hasCache) setLoadError(true);
     }).finally(() => {
       clearTimeout(slowTimer);
       clearTimeout(errorTimer);
