@@ -460,11 +460,65 @@ SEED_PRODUCTS = [
 ]
 
 
+async def _background_seed():
+    """Runs seed checks and index creation in the background so the server
+    can accept requests immediately on cold start."""
+    SEED_VERSION = "v9-product-tags"
+    try:
+        services_count = await db.services.count_documents({})
+        if services_count == 0:
+            await db.services.insert_many([dict(s) for s in SEED_SERVICES])
+        categories_count = await db.categories.count_documents({})
+        if categories_count == 0:
+            await db.categories.insert_many([dict(c) for c in SEED_CATEGORIES])
+        testimonials_count = await db.testimonials.count_documents({})
+        if testimonials_count == 0:
+            await db.testimonials.insert_many([dict(t) for t in SEED_TESTIMONIALS])
+        pc_count = await db.product_categories.count_documents({})
+        if pc_count == 0:
+            await db.product_categories.insert_many([dict(c) for c in SEED_PRODUCT_CATEGORIES])
+        products_count = await db.products.count_documents({})
+        if products_count == 0:
+            await db.products.insert_many([dict(p) for p in SEED_PRODUCTS])
+        settings_doc = await db.settings.find_one({"_id": "main"})
+        if not settings_doc:
+            await db.settings.insert_one({
+                "_id": "main",
+                "open_hour": 10,
+                "close_hour": 20,
+                "slot_minutes": 30,
+                "open_days": [0, 1, 2, 3, 4, 5],
+            })
+        # ── Indexes to prevent sort-memory errors on MongoDB Atlas free tier ──
+        await db.products.create_index("order")
+        await db.products.create_index("product_category_id")
+        await db.product_categories.create_index("order")
+        await db.categories.create_index("order")
+        await db.bookings.create_index("created_at")
+        await db.orders.create_index("created_at")
+        await db.promotions.create_index("starts_at")
+        await db.blocked_dates.create_index("date")
+        # ── User auth indexes ──────────────────────────────────────────────────
+        await db.users.create_index("email", unique=True)
+        await db.otps.create_index("email")
+        # TTL index: MongoDB auto-deletes OTP docs 900 seconds after expires_at
+        await db.otps.create_index("expires_at", expireAfterSeconds=0)
+        logger.info(
+            f"DB seeded {SEED_VERSION}. ProductCats: {await db.product_categories.count_documents({})}, "
+            f"Products: {await db.products.count_documents({})}"
+        )
+    except Exception as e:
+        logger.error(f"Background seed error: {e}")
+
+
 @app.on_event("startup")
 async def seed_db():
+    """On startup: handle version-based reseeds synchronously (rare),
+    then kick off the rest in the background so requests are served immediately."""
     SEED_VERSION = "v9-product-tags"
     meta = await db.app_meta.find_one({"_id": "seed"}, {"_id": 0}) or {}
     if meta.get("version") != SEED_VERSION:
+        # Version changed — wipe and reseed synchronously (rare event)
         await db.services.delete_many({})
         await db.categories.delete_many({})
         await db.testimonials.delete_many({})
@@ -473,48 +527,11 @@ async def seed_db():
         await db.app_meta.update_one(
             {"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True
         )
-    services_count = await db.services.count_documents({})
-    if services_count == 0:
-        await db.services.insert_many([dict(s) for s in SEED_SERVICES])
-    categories_count = await db.categories.count_documents({})
-    if categories_count == 0:
-        await db.categories.insert_many([dict(c) for c in SEED_CATEGORIES])
-    testimonials_count = await db.testimonials.count_documents({})
-    if testimonials_count == 0:
-        await db.testimonials.insert_many([dict(t) for t in SEED_TESTIMONIALS])
-    pc_count = await db.product_categories.count_documents({})
-    if pc_count == 0:
-        await db.product_categories.insert_many([dict(c) for c in SEED_PRODUCT_CATEGORIES])
-    products_count = await db.products.count_documents({})
-    if products_count == 0:
-        await db.products.insert_many([dict(p) for p in SEED_PRODUCTS])
-    settings_doc = await db.settings.find_one({"_id": "main"})
-    if not settings_doc:
-        await db.settings.insert_one({
-            "_id": "main",
-            "open_hour": 10,
-            "close_hour": 20,
-            "slot_minutes": 30,
-            "open_days": [0, 1, 2, 3, 4, 5],
-        })
-    # ── Indexes to prevent sort-memory errors on MongoDB Atlas free tier ──
-    await db.products.create_index("order")
-    await db.products.create_index("product_category_id")
-    await db.product_categories.create_index("order")
-    await db.categories.create_index("order")
-    await db.bookings.create_index("created_at")
-    await db.orders.create_index("created_at")
-    await db.promotions.create_index("starts_at")
-    await db.blocked_dates.create_index("date")
-    # ── User auth indexes ──────────────────────────────────────────────────
-    await db.users.create_index("email", unique=True)
-    await db.otps.create_index("email")
-    # TTL index: MongoDB auto-deletes OTP docs 900 seconds after expires_at
-    await db.otps.create_index("expires_at", expireAfterSeconds=0)
-    logger.info(
-        f"DB seeded {SEED_VERSION}. ProductCats: {await db.product_categories.count_documents({})}, "
-        f"Products: {await db.products.count_documents({})}"
-    )
+        await _background_seed()
+    else:
+        # Version matches — data is safe, run checks in background
+        # Server is ready to handle requests immediately
+        asyncio.create_task(_background_seed())
 
 
 # ============== Helpers ==============
