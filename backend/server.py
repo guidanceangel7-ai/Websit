@@ -513,25 +513,9 @@ async def _background_seed():
 
 @app.on_event("startup")
 async def seed_db():
-    """On startup: handle version-based reseeds synchronously (rare),
-    then kick off the rest in the background so requests are served immediately."""
-    SEED_VERSION = "v9-product-tags"
-    meta = await db.app_meta.find_one({"_id": "seed"}, {"_id": 0}) or {}
-    if meta.get("version") != SEED_VERSION:
-        # Version changed — wipe and reseed synchronously (rare event)
-        await db.services.delete_many({})
-        await db.categories.delete_many({})
-        await db.testimonials.delete_many({})
-        await db.products.delete_many({})
-        await db.product_categories.delete_many({})
-        await db.app_meta.update_one(
-            {"_id": "seed"}, {"$set": {"version": SEED_VERSION}}, upsert=True
-        )
-        await _background_seed()
-    else:
-        # Version matches — data is safe, run checks in background
-        # Server is ready to handle requests immediately
-        asyncio.create_task(_background_seed())
+    """On startup: only insert missing seed data — NEVER delete existing data.
+    All DB work runs in the background so the server accepts requests immediately."""
+    asyncio.create_task(_background_seed())
 
 
 # ============== Helpers ==============
