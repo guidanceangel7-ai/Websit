@@ -939,6 +939,7 @@ export default function Shop({ initialCategoryId, initialProductId }) {
   const [categories, setCategories] = useState([]);
   const [allTags, setAllTags]       = useState([]);
   const [loading, setLoading]       = useState(true);
+  const [slowLoad, setSlowLoad]     = useState(false);
   const [view, setView]             = useState("home");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [activeTag, setActiveTag]   = useState(null);
@@ -958,7 +959,26 @@ export default function Shop({ initialCategoryId, initialProductId }) {
 
   useEffect(() => {
     let alive = true;
-    setLoading(true);
+
+    // Show cached data instantly while re-fetching in background
+    try {
+      const cached = sessionStorage.getItem("ga_shop_cache");
+      if (cached) {
+        const { cats, tags, ts } = JSON.parse(cached);
+        const age = Date.now() - ts;
+        // Use cache if less than 5 minutes old — show instantly, still refresh in bg
+        if (age < 5 * 60 * 1000 && Array.isArray(cats) && cats.length > 0) {
+          setCategories(cats);
+          categoriesRef.current = cats;
+          setAllTags(Array.isArray(tags) ? tags : []);
+          setLoading(false);
+        }
+      }
+    } catch (_) {}
+
+    // Show "waking up" message if load takes > 4 seconds (Render cold start)
+    const slowTimer = setTimeout(() => { if (alive) setSlowLoad(true); }, 4000);
+
     Promise.all([
       fetch(`${API}/product-categories`).then((r) => r.json()).catch(() => []),
       fetch(`${API}/tags`).then((r) => r.json()).catch(() => []),
@@ -968,8 +988,16 @@ export default function Shop({ initialCategoryId, initialProductId }) {
       setCategories(safeCats);
       categoriesRef.current = safeCats;
       setAllTags(Array.isArray(tags) ? tags : []);
-    }).finally(() => { if (alive) setLoading(false); });
-    return () => { alive = false; };
+      // Cache for this session
+      try {
+        sessionStorage.setItem("ga_shop_cache", JSON.stringify({ cats: safeCats, tags, ts: Date.now() }));
+      } catch (_) {}
+    }).finally(() => {
+      if (alive) { setLoading(false); setSlowLoad(false); }
+      clearTimeout(slowTimer);
+    });
+
+    return () => { alive = false; clearTimeout(slowTimer); };
   }, []);
 
   // ── Popstate: sync shop state when browser back/forward is pressed ──────────
@@ -1158,8 +1186,16 @@ export default function Shop({ initialCategoryId, initialProductId }) {
             )}
 
             {loading ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} aspect="rect" rows={3} />)}
+              <div>
+                {slowLoad && (
+                  <div className="flex items-center justify-center gap-3 mb-6 py-3 px-5 rounded-2xl bg-[#EBB99A]/20 border border-[#EBB99A]/40 text-sm text-[#3A2E5D]/70">
+                    <Loader2 size={16} className="animate-spin text-[#6B5B95] flex-shrink-0" />
+                    <span>Waking up our server… this takes about 30 seconds on first visit ✦</span>
+                  </div>
+                )}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} aspect="rect" rows={3} />)}
+                </div>
               </div>
             ) : categories.length === 0 ? (
               <div className="text-center py-24 text-[#9B8AC4]">
