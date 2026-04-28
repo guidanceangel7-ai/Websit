@@ -940,6 +940,8 @@ export default function Shop({ initialCategoryId, initialProductId }) {
   const [allTags, setAllTags]       = useState([]);
   const [loading, setLoading]       = useState(true);
   const [slowLoad, setSlowLoad]     = useState(false);
+  const [loadError, setLoadError]   = useState(false);
+  const [retryKey, setRetryKey]     = useState(0);
   const [view, setView]             = useState("home");
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [activeTag, setActiveTag]   = useState(null);
@@ -959,6 +961,9 @@ export default function Shop({ initialCategoryId, initialProductId }) {
 
   useEffect(() => {
     let alive = true;
+    setLoadError(false);
+    setLoading(true);
+    setSlowLoad(false);
 
     // Show cached data instantly while re-fetching in background
     try {
@@ -966,7 +971,6 @@ export default function Shop({ initialCategoryId, initialProductId }) {
       if (cached) {
         const { cats, tags, ts } = JSON.parse(cached);
         const age = Date.now() - ts;
-        // Use cache if less than 5 minutes old — show instantly, still refresh in bg
         if (age < 5 * 60 * 1000 && Array.isArray(cats) && cats.length > 0) {
           setCategories(cats);
           categoriesRef.current = cats;
@@ -976,29 +980,36 @@ export default function Shop({ initialCategoryId, initialProductId }) {
       }
     } catch (_) {}
 
-    // Show "waking up" message if load takes > 4 seconds (Render cold start)
+    // Show "waking up" message after 4 seconds
     const slowTimer = setTimeout(() => { if (alive) setSlowLoad(true); }, 4000);
+    // Show error + retry button after 70 seconds (backend truly unresponsive)
+    const errorTimer = setTimeout(() => { if (alive) { setLoadError(true); setLoading(false); setSlowLoad(false); } }, 70000);
+
+    const controller = new AbortController();
 
     Promise.all([
-      fetch(`${API}/product-categories`).then((r) => r.json()).catch(() => []),
-      fetch(`${API}/tags`).then((r) => r.json()).catch(() => []),
+      fetch(`${API}/product-categories`, { signal: controller.signal }).then((r) => r.json()).catch((e) => { if (e.name === "AbortError") throw e; return []; }),
+      fetch(`${API}/tags`, { signal: controller.signal }).then((r) => r.json()).catch((e) => { if (e.name === "AbortError") throw e; return []; }),
     ]).then(([cats, tags]) => {
       if (!alive) return;
       const safeCats = Array.isArray(cats) ? cats : [];
       setCategories(safeCats);
       categoriesRef.current = safeCats;
       setAllTags(Array.isArray(tags) ? tags : []);
-      // Cache for this session
+      setLoadError(false);
       try {
         sessionStorage.setItem("ga_shop_cache", JSON.stringify({ cats: safeCats, tags, ts: Date.now() }));
       } catch (_) {}
+    }).catch(() => {
+      // AbortError or network failure — error timer will handle UI
     }).finally(() => {
-      if (alive) { setLoading(false); setSlowLoad(false); }
       clearTimeout(slowTimer);
+      clearTimeout(errorTimer);
+      if (alive) { setLoading(false); setSlowLoad(false); }
     });
 
-    return () => { alive = false; clearTimeout(slowTimer); };
-  }, []);
+    return () => { alive = false; clearTimeout(slowTimer); clearTimeout(errorTimer); controller.abort(); };
+  }, [retryKey]);
 
   // ── Popstate: sync shop state when browser back/forward is pressed ──────────
   // This handles: back from product modal → category, back from category → home,
@@ -1185,12 +1196,24 @@ export default function Shop({ initialCategoryId, initialProductId }) {
               </div>
             )}
 
-            {loading ? (
+            {loadError ? (
+              <div className="text-center py-24">
+                <Sparkles size={44} className="mx-auto mb-4 text-[#C8B6E2] opacity-60" />
+                <p className="font-display text-xl text-[#3A2E5D]">Server is taking too long</p>
+                <p className="text-sm text-[#9B8AC4] mt-2 mb-6">Our server may be waking up. Please try again in a moment.</p>
+                <button
+                  onClick={() => { setRetryKey((k) => k + 1); }}
+                  className="px-6 py-3 rounded-full bg-[#6B5B95] text-[#FBF4E8] font-semibold text-sm hover:bg-[#5a4a84] transition shadow-md"
+                >
+                  ↺ Try Again
+                </button>
+              </div>
+            ) : loading ? (
               <div>
                 {slowLoad && (
                   <div className="flex items-center justify-center gap-3 mb-6 py-3 px-5 rounded-2xl bg-[#EBB99A]/20 border border-[#EBB99A]/40 text-sm text-[#3A2E5D]/70">
                     <Loader2 size={16} className="animate-spin text-[#6B5B95] flex-shrink-0" />
-                    <span>Waking up our server… this takes about 30 seconds on first visit ✦</span>
+                    <span>Waking up our server… usually takes 20–40 seconds on first visit ✦</span>
                   </div>
                 )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
