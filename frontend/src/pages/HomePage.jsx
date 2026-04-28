@@ -57,6 +57,13 @@ export default function HomePage({ scrollToShop, openBooking }) {
   const returnUrlRef = useRef("/");
   const shopRef      = useRef(null);
 
+  // ── Pre-warm backend on page load so Shop loads fast ─────────────────────
+  // Fires immediately when the page opens — by the time the user scrolls
+  // to the Shop section, the backend is already awake.
+  useEffect(() => {
+    fetch(`${process.env.REACT_APP_BACKEND_URL}/api/`).catch(() => {});
+  }, []);
+
   // ── Load data ─────────────────────────────────────────────────────────────
   useEffect(() => {
     apiFetch("/categories").then((r)   => setCategories(Array.isArray(r) ? r : []));
