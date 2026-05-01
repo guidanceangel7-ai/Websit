@@ -848,7 +848,7 @@ function CategoryView({ cat, cartCount, onBack, onOpenCart, addToCart, cartQtyFo
       {/* Category hero banner */}
       <div className={`rounded-3xl overflow-hidden mb-8 bg-gradient-to-br ${grad(cat.id)} relative`}>
         {cat.image_url && (
-          <img src={cat.image_url} alt={cat.name} className="absolute inset-0 w-full h-full object-cover opacity-30" />
+          <img src={resolveUrl(cat.image_url)} alt={cat.name} className="absolute inset-0 w-full h-full object-cover opacity-30" />
         )}
         <div className="relative p-8 sm:p-12 text-white">
           <Overline className="text-white/70">{cat.name}</Overline>
