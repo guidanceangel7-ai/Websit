@@ -289,9 +289,13 @@ function ProductDetailModal({ productId, onClose, onAdd, cartQty }) {
     return () => window.removeEventListener("keydown", handler);
   }, [onClose]);
 
-  // Build full image list
+  // Build image URL list from image_count — actual bytes fetched separately by the browser
+  // This means the detail popup opens instantly; images load progressively after.
   const images = product
-    ? (product.images?.length ? product.images : product.image_url ? [product.image_url] : [])
+    ? Array.from(
+        { length: product.image_count || (product.has_image ? 1 : 0) },
+        (_, i) => `/api/products/${product.id}/image/${i}`
+      )
     : [];
 
   const resolveImg = (url) => {
