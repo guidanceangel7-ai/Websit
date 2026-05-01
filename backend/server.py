@@ -1760,11 +1760,12 @@ async def public_list_products():
 
 @api_router.get("/products/{pid}")
 async def public_get_product(pid: str):
-    """Return a single product with all images — used by the product detail popup."""
+    """Return a single product — images are served via /products/{pid}/image/{idx}.
+    Base64 is never sent to the browser; this keeps the detail popup fast."""
     doc = await db.products.find_one({"id": pid}, {"_id": 0})
     if not doc:
         raise HTTPException(status_code=404, detail="Product not found")
-    return _normalize_product_images(doc)
+    return _strip_base64_images(_normalize_product_images(doc))
 
 
 @api_router.get("/products/{pid}/image/{idx}")
