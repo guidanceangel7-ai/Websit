@@ -57,15 +57,16 @@ function grad(id = "") {
   return GRADS[h % GRADS.length];
 }
 
-// ── Resolve image URL (handles http, /api path, base64) ─────────────────────
-function imgSrc(product) {
-  const url = product?.image_url;
+// ── Resolve image URL (handles http, any /api path, base64) ─────────────────
+function resolveUrl(url) {
   if (!url) return null;
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
-  if (url.startsWith("/api/products/"))
-    return `${process.env.REACT_APP_BACKEND_URL}${url}`;
+  if (url.startsWith("/api/")) return `${process.env.REACT_APP_BACKEND_URL}${url}`;
   if (url.startsWith("data:")) return url;
   return null;
+}
+function imgSrc(product) {
+  return resolveUrl(product?.image_url);
 }
 
 // ── Simple in-app toast notification ────────────────────────────────────────
@@ -152,7 +153,7 @@ function CategoryCard({ cat, onClick }) {
     >
       <div className={`h-44 sm:h-52 bg-gradient-to-br ${grad(cat.id)} relative overflow-hidden`}>
         {cat.image_url ? (
-          <img src={cat.image_url} alt={cat.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
+          <img src={resolveUrl(cat.image_url)} alt={cat.name} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105" loading="lazy" />
         ) : (
           <div className="w-full h-full flex flex-col items-center justify-center gap-2">
             <Sparkles size={36} className="text-white/60" />
