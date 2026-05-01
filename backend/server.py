@@ -1636,45 +1636,42 @@ async def public_list_product_categories():
         await db.product_categories.find({}, {"_id": 0, "image_url": 0}).to_list(200),
         key=lambda x: x.get("order", 9999)
     )
-    # Mark which categories actually have an image stored (lightweight check)
+    # Lightweight check: which category IDs have a non-empty image stored?
     cats_with_img = {
         doc["id"]
         for doc in await db.product_categories.find(
-            {"image_url": {"$exists": True, "$nin": [None, "", "null"]}},
+            {"image_url": {"$nin": [None, ""]}},
             {"_id": 0, "id": 1}
         ).to_list(200)
+        if doc.get("id")
     }
     for c in cats_raw:
         cid = c.get("id", "")
         c["image_url"] = f"/api/product-categories/{cid}/image" if cid in cats_with_img else None
 
-    # ── Products: use aggregation to compute has_image WITHOUT sending base64 ─
-    # This avoids pushing hundreds of KB of base64 across the network on every
-    # shop page load.  The actual image bytes are served lazily by /products/{pid}/image/0.
-    pipeline = [
-        {"$project": {
-            "_id": 0,
-            "images": 0,
-            "image_url": 0,
-            "has_image": {"$cond": [
-                {"$gt": [{"$strLenCP": {"$ifNull": ["$image_url", ""]}}, 10]},
-                True, False
-            ]},
-            "image_count": {"$cond": [
-                {"$gt": [{"$strLenCP": {"$ifNull": ["$image_url", ""]}}, 10]},
-                1, 0
-            ]},
-        }},
-        {"$sort": {"order": 1}},
-    ]
-    products = await db.products.aggregate(pipeline).to_list(500)
+    # ── Products: fetch metadata only, skip all base64 image bytes ───────────
+    products_raw = sorted(
+        await db.products.find({}, {"_id": 0, "images": 0, "image_url": 0}).to_list(500),
+        key=lambda x: x.get("order", 9999)
+    )
+    # Lightweight check: which product IDs actually have an image stored?
+    products_with_img = {
+        doc["id"]
+        for doc in await db.products.find(
+            {"image_url": {"$nin": [None, ""]}},
+            {"_id": 0, "id": 1}
+        ).to_list(500)
+        if doc.get("id")
+    }
 
     by_cat: dict = {}
-    for p in products:
-        cat_id = p.get("product_category_id")
+    for p in products_raw:
         pid = p.get("id", "")
-        # Set lightweight image URL — frontend fetches actual bytes separately
-        p["image_url"] = f"/api/products/{pid}/image/0" if p.get("has_image") else None
+        cat_id = p.get("product_category_id")
+        has_img = pid in products_with_img
+        p["image_url"] = f"/api/products/{pid}/image/0" if has_img else None
+        p["has_image"] = has_img
+        p["image_count"] = 1 if has_img else 0
         # Normalise tags
         raw_tags = p.get("tags") or []
         seen: set = set()
