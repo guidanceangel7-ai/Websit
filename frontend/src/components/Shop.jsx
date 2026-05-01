@@ -989,10 +989,12 @@ export default function Shop({ initialCategoryId, initialProductId }) {
     // If no cache    → show spinner + waking up message until data arrives
     if (!hasCache) setLoading(true);
 
+    // Show "waking up" message after 5 sec (only if no cache shown)
     const slowTimer = setTimeout(() => { if (alive && !hasCache) setSlowLoad(true); }, 5000);
+    // Only show error after 3 full minutes — Render cold start can take 90+ sec
     const errorTimer = setTimeout(() => {
       if (alive && !hasCache) { setLoadError(true); setLoading(false); setSlowLoad(false); }
-    }, 75000);
+    }, 180000);
 
     const controller = new AbortController();
 
