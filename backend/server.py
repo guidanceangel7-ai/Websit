@@ -1630,22 +1630,87 @@ def _strip_base64_images(product: dict) -> dict:
 
 @api_router.get("/product-categories")
 async def public_list_product_categories():
-    cats = sorted(
-        await db.product_categories.find({}, {"_id": 0}).to_list(200),
+    # ── Categories: exclude heavy base64 image_url from the wire ─────────────
+    # We serve category images via /api/product-categories/{cid}/image instead.
+    cats_raw = sorted(
+        await db.product_categories.find({}, {"_id": 0, "image_url": 0}).to_list(200),
         key=lambda x: x.get("order", 9999)
     )
-    # Fetch products WITHOUT the heavy images[] array — only keep image_url (primary)
-    products = sorted(
-        await db.products.find({}, {"_id": 0, "images": 0}).to_list(500),
-        key=lambda x: x.get("order", 9999)
-    )
+    # Mark which categories actually have an image stored (lightweight check)
+    cats_with_img = {
+        doc["id"]
+        for doc in await db.product_categories.find(
+            {"image_url": {"$exists": True, "$nin": [None, "", "null"]}},
+            {"_id": 0, "id": 1}
+        ).to_list(200)
+    }
+    for c in cats_raw:
+        cid = c.get("id", "")
+        c["image_url"] = f"/api/product-categories/{cid}/image" if cid in cats_with_img else None
+
+    # ── Products: use aggregation to compute has_image WITHOUT sending base64 ─
+    # This avoids pushing hundreds of KB of base64 across the network on every
+    # shop page load.  The actual image bytes are served lazily by /products/{pid}/image/0.
+    pipeline = [
+        {"$project": {
+            "_id": 0,
+            "images": 0,
+            "image_url": 0,
+            "has_image": {"$cond": [
+                {"$gt": [{"$strLenCP": {"$ifNull": ["$image_url", ""]}}, 10]},
+                True, False
+            ]},
+            "image_count": {"$cond": [
+                {"$gt": [{"$strLenCP": {"$ifNull": ["$image_url", ""]}}, 10]},
+                1, 0
+            ]},
+        }},
+        {"$sort": {"order": 1}},
+    ]
+    products = await db.products.aggregate(pipeline).to_list(500)
+
     by_cat: dict = {}
     for p in products:
         cat_id = p.get("product_category_id")
-        by_cat.setdefault(cat_id, []).append(_strip_base64_images(_normalize_product_images(p)))
-    for c in cats:
+        pid = p.get("id", "")
+        # Set lightweight image URL — frontend fetches actual bytes separately
+        p["image_url"] = f"/api/products/{pid}/image/0" if p.get("has_image") else None
+        # Normalise tags
+        raw_tags = p.get("tags") or []
+        seen: set = set()
+        clean: list = []
+        for t in raw_tags:
+            slug = _slugify_tag(str(t))
+            if slug and slug not in seen:
+                seen.add(slug)
+                clean.append(slug)
+        p["tags"] = clean
+        by_cat.setdefault(cat_id, []).append(p)
+
+    for c in cats_raw:
         c["products"] = by_cat.get(c.get("id"), [])
-    return cats
+    return cats_raw
+
+
+@api_router.get("/product-categories/{cid}/image")
+async def public_product_category_image(cid: str):
+    """Serve the category cover image without bloating the listing payload."""
+    from fastapi.responses import Response
+    import base64 as _b64
+    doc = await db.product_categories.find_one({"id": cid}, {"_id": 0, "image_url": 1})
+    if not doc:
+        raise HTTPException(status_code=404, detail="Category not found")
+    img_data = doc.get("image_url") or ""
+    if img_data.startswith("data:"):
+        header, encoded = img_data.split(",", 1)
+        mime = header.split(":")[1].split(";")[0]
+        raw = _b64.b64decode(encoded)
+        return Response(content=raw, media_type=mime,
+                        headers={"Cache-Control": "public, max-age=86400"})
+    if img_data.startswith("http"):
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url=img_data)
+    raise HTTPException(status_code=404, detail="Image not found")
 
 
 # ----- Admin product category CRUD -----
